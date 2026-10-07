@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Overhead</title>
+<meta name="description" content="See what's flying over you tonight.">
+<meta name="theme-color" content="#03050b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Overhead">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Overhead">
+<meta property="og:description" content="See what's flying over you tonight.">
+<meta property="og:image" content="https://unpkg.com/three-globe@2.31.0/example/img/earth-night.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%2303050b'/%3E%3Ccircle cx='32' cy='32' r='16' fill='none' stroke='%23f2b84b' stroke-width='3'/%3E%3Ccircle cx='46' cy='20' r='5' fill='%23ffd88a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#03050b; --ink:#f5f0e6; --muted:rgba(245,240,230,.66); --faint:rgba(245,240,230,.42);
+  --gold:#f2b84b; --gold2:#ffd88a; --line:rgba(255,255,255,.09);
+  --glass:rgba(13,17,29,.56);
+  --safeT:env(safe-area-inset-top,0px); --safeB:env(safe-area-inset-bottom,0px);
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--ink);overflow:hidden;
+  font-family:Manrope,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none}
+body{position:fixed;inset:0}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+#stage{position:fixed;inset:0;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%;opacity:0;transition:opacity 2s ease}
+#stage.ready canvas{opacity:1}
+.shade{position:fixed;left:0;right:0;bottom:0;height:46vh;pointer-events:none;z-index:2;
+  background:linear-gradient(180deg,rgba(3,5,11,0) 0%,rgba(3,5,11,.55) 55%,rgba(3,5,11,.85) 100%)}
+.shadeTop{position:fixed;left:0;right:0;top:0;height:22vh;pointer-events:none;z-index:2;
+  background:linear-gradient(0deg,rgba(3,5,11,0),rgba(3,5,11,.6))}
+
+/* top bar */
+.top{position:fixed;z-index:5;top:calc(var(--safeT) + 16px);left:16px;right:16px;display:flex;
+  justify-content:space-between;align-items:flex-start;gap:12px;pointer-events:none;
+  opacity:0;transform:translateY(-10px);transition:opacity 1.2s var(--ease) .3s,transform 1.2s var(--ease) .3s}
+.ready .top{opacity:1;transform:none}
+.brand h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:38px;line-height:.95;letter-spacing:.2px}
+.brand h1 em{color:var(--gold);font-style:italic}
+.brand p{font-size:14px;color:var(--muted);margin-top:6px;font-weight:500;letter-spacing:.2px}
+.pill{pointer-events:auto;display:flex;align-items:center;gap:10px;padding:10px 14px 10px 16px;border-radius:999px;
+  background:var(--glass);-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--line);font-size:14px;font-weight:700;white-space:nowrap;transition:background .4s,border-color .4s}
+.pill .sw{width:34px;height:20px;border-radius:10px;background:rgba(255,255,255,.18);position:relative;transition:background .4s}
+.pill .sw::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .45s var(--ease)}
+.pill.on{border-color:rgba(242,184,75,.4)}
+.pill.on .sw{background:var(--gold)}
+.pill.on .sw::after{transform:translateX(14px)}
+
+/* main card */
+.card{position:fixed;z-index:6;left:16px;right:16px;bottom:calc(var(--safeB) + 16px);margin:0 auto;max-width:520px;
+  padding:20px 22px 18px;border-radius:30px;
+  background:linear-gradient(180deg,rgba(24,28,44,.72),rgba(9,11,20,.82));
+  -webkit-backdrop-filter:blur(26px) saturate(150%);backdrop-filter:blur(26px) saturate(150%);
+  border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08);
+  transform:translateY(calc(100% + 40px));transition:transform 1.1s var(--ease)}
+.card.show{transform:none}
+.card .grab{width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.2);margin:-8px auto 12px}
+.inner{transition:opacity .35s ease,transform .5s var(--ease)}
+.inner.swap{opacity:0;transform:translateY(8px)}
+.eyebrow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;letter-spacing:2.6px;
+  font-weight:800;color:var(--gold);text-transform:uppercase}
+.chip{font-size:13px;letter-spacing:.2px;text-transform:none;font-weight:700;padding:5px 11px;border-radius:999px;
+  background:rgba(242,184,75,.13);color:var(--gold2);border:1px solid rgba(242,184,75,.3);white-space:nowrap}
+.name{font-size:23px;font-weight:800;margin-top:10px;letter-spacing:-.2px;line-height:1.2}
+.timerow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:4px}
+.time{font-family:'Instrument Serif',serif;font-size:72px;line-height:.95;letter-spacing:-1.5px;font-variant-numeric:lining-nums}
+.time small{font-family:Manrope,sans-serif;font-size:19px;font-weight:700;color:var(--muted);margin-left:8px;letter-spacing:0}
+.when{text-align:right;padding-bottom:8px}
+.when .d{font-size:15px;color:var(--muted);font-weight:600}
+.when .c{font-size:18px;font-weight:800;margin-top:3px}
+.when .c.now{color:var(--gold2);display:inline-flex;align-items:center;gap:8px}
+.when .c.now::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 0 rgba(242,184,75,.7);animation:ping 1.6s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(242,184,75,.7)}80%,100%{box-shadow:0 0 0 12px rgba(242,184,75,0)}}
+.look{display:flex;align-items:center;gap:14px;margin-top:16px;font-size:18px;font-weight:700;line-height:1.3}
+.compass{width:46px;height:46px;flex:none;border-radius:50%;border:1px solid rgba(255,255,255,.14);position:relative;
+  background:radial-gradient(circle,rgba(255,255,255,.06),rgba(255,255,255,.01))}
+.compass b{position:absolute;top:3px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:800;color:var(--faint);letter-spacing:.5px}
+.compass svg{position:absolute;inset:0;transition:transform 1.2s var(--ease)}
+.path{font-size:16px;color:var(--muted);margin-top:10px;line-height:1.5}
+.actions{display:flex;gap:10px;margin-top:18px}
+.btn{flex:1;height:54px;border-radius:18px;background:rgba(255,255,255,.07);border:1px solid var(--line);
+  font-size:16px;font-weight:800;letter-spacing:.1px;transition:transform .2s var(--ease),background .3s}
+.btn:active{transform:scale(.97)}
+.btn.gold{background:linear-gradient(180deg,#f7c865,#e2a138);color:#1d1406;border:none;box-shadow:0 10px 30px rgba(226,161,56,.25)}
+.btn.slim{flex:0 0 auto;padding:0 20px}
+.empty{font-size:16px;color:var(--muted);margin-top:10px;line-height:1.5}
+.skel{height:14px;border-radius:7px;margin-top:12px;background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(255,255,255,.12),rgba(255,255,255,.05));
+  background-size:200% 100%;animation:sh 1.6s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+
+/* sheet */
+.scrim{position:fixed;inset:0;z-index:7;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .6s ease}
+.scrim.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;z-index:8;left:0;right:0;bottom:0;margin:0 auto;max-width:620px;max-height:80vh;
+  border-radius:32px 32px 0 0;background:rgba(10,13,22,.9);
+  -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
+  border:1px solid var(--line);border-bottom:0;padding:10px 12px calc(var(--safeB) + 14px);
+  display:flex;flex-direction:column;transform:translateY(105%);transition:transform .75s var(--ease)}
+.sheet.show{transform:none}
+.sheet .grab{width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,.25);margin:4px auto 16px;flex:none}
+.sheet header{padding:0 10px 10px;display:flex;justify-content:space-between;align-items:flex-end}
+.sheet h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:42px;line-height:1}
+.sheet header p{color:var(--muted);font-size:15px;margin-top:6px}
+.sheet .x{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);display:grid;place-items:center;flex:none}
+.list{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:6px}
+.row{display:grid;grid-template-columns:108px 1fr auto;gap:12px;align-items:center;padding:16px 10px;border-top:1px solid var(--line);
+  border-radius:16px;transition:background .25s;width:100%;text-align:left}
+.row:active{background:rgba(255,255,255,.06)}
+.row .t{font-family:'Instrument Serif',serif;font-size:34px;line-height:.9}
+.row .t small{display:block;white-space:nowrap;font-family:Manrope,sans-serif;font-size:12px;color:var(--faint);font-weight:700;margin-top:6px;letter-spacing:.3px}
+.row .n{font-weight:800;font-size:17px;line-height:1.25}
+.row .l{font-size:15px;color:var(--muted);margin-top:4px;line-height:1.35}
+.row .chip{font-size:12px;padding:4px 9px}
+.row.live .t{color:var(--gold2)}
+.none{color:var(--muted);padding:20px 10px;font-size:16px;line-height:1.5}
+
+/* labels */
+.lbl{position:fixed;left:0;top:0;z-index:3;pointer-events:none;font-size:13px;font-weight:800;letter-spacing:.5px;color:var(--gold2);
+  text-shadow:0 1px 10px rgba(0,0,0,.9),0 0 2px #000;white-space:nowrap;opacity:0;transition:opacity .4s}
+.lbl.on{opacity:1}
+.lbl.you{color:#fff;font-weight:700}
+
+/* loader */
+#loader{position:fixed;inset:0;z-index:30;display:grid;place-items:center;
+  background:radial-gradient(ellipse at 50% 55%,#0d1630 0%,#03050b 65%);transition:opacity 1.4s ease,visibility 1.4s}
+#loader.hide{opacity:0;visibility:hidden}
+.ld{text-align:center}
+.ld h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:64px;line-height:1}
+.ld h1 em{color:var(--gold)}
+.ld p{margin-top:14px;font-size:16px;font-weight:600;color:var(--muted);letter-spacing:.3px}
+.orbit{width:120px;height:120px;margin:0 auto 26px;position:relative}
+.orbit::before{content:"";position:absolute;inset:34px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#2b4a8a,#0b1530 70%);box-shadow:0 0 40px rgba(80,140,255,.25)}
+.orbit i{position:absolute;inset:6px;border-radius:50%;border:1px solid rgba(255,255,255,.1);animation:spin 3.2s linear infinite}
+.orbit i::after{content:"";position:absolute;top:-4px;left:50%;width:8px;height:8px;margin-left:-4px;border-radius:50%;
+  background:var(--gold2);box-shadow:0 0 14px 3px rgba(255,216,138,.6)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media (min-width:900px){
+  .card{left:28px;right:auto;margin:0;width:440px;bottom:calc(var(--safeB) + 28px)}
+  .top{left:28px;right:28px;top:calc(var(--safeT) + 26px)}
+  .brand h1{font-size:46px}
+}
+@media (max-height:560px) and (orientation:landscape){
+  .card{left:16px;right:auto;width:380px;margin:0;padding:14px 18px}
+  .time{font-size:52px}
+  .actions{margin-top:12px}
+  .path{display:none}
+}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div class="shadeTop"></div>
+<div class="shade"></div>
+
+<div class="top">
+  <div class="brand"><h1>Over<em>head</em></h1><p>What's flying over you</p></div>
+  <button class="pill" id="slBtn" aria-pressed="false"><span>Show all Starlink</span><span class="sw"></span></button>
+</div>
+
+<div class="lbl" id="lblIss">Space Station</div>
+<div class="lbl" id="lblSel"></div>
+<div class="lbl you" id="lblYou">You</div>
+
+<section class="card" id="card"><div class="grab"></div><div class="inner" id="cardInner"></div></section>
+
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="sheet" aria-label="Coming up">
+  <div class="grab"></div>
+  <header><div><h2>Coming up</h2><p>What you can see from where you are</p></div>
+    <button class="x" id="sheetX" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></button></header>
+  <div class="list" id="list"></div>
+</section>
+
+<div id="loader"><div class="ld"><div class="orbit"><i></i></div><h1>Over<em>head</em></h1><p id="ldMsg">Finding what's above you</p></div></div>
+
+<script id="workerSrc" type="text/js-worker">
+importScripts('https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js');
+const S = self.satellite;
+const RE = 6371, D2R = Math.PI/180, R2D = 180/Math.PI, DARK = Math.sin(-6*D2R);
+let main = [], sl = [], trains = [], obs = null, slOn = false, paused = false, passTimer = null;
+
+function parse(txt){
+  const L = (txt||'').split(/\r?\n/), out = [];
+  for (let i = 0; i < L.length - 1; i++){
+    const a = L[i], b = L[i+1];
+    if (a.startsWith('1 ') && b.startsWith('2 ')){
+      const prev = i > 0 ? L[i-1].trim() : '';
+      const name = (prev && !prev.startsWith('1 ') && !prev.startsWith('2 ')) ? prev : '';
+      const rec = S.twoline2satrec(a, b);
+      if (rec && !rec.error) out.push({ name, l1: a, l2: b, rec, id: a.substring(2,7).trim() });
+      i++;
+    }
+  }
+  return out;
+}
+function yearOf(l1){ const yy = parseInt(l1.substring(9,11),10); return isNaN(yy) ? null : (yy < 57 ? 2000+yy : 1900+yy); }
+function kindOf(s){
+  if (s.id === '25544') return 'iss';
+  if (/TIANHE/.test(s.name)) return 'css';
+  if (/^HST\b/.test(s.name)) return 'hst';
+  if (/R\/B/.test(s.name)) return 'rb';
+  return 'sat';
+}
+function sunDir(t){
+  const n = t/86400000 + 2440587.5 - 2451545;
+  const L = (280.460 + 0.9856474*n)*D2R, g = (357.528 + 0.9856003*n)*D2R;
+  const lam = L + (1.915*Math.sin(g) + 0.020*Math.sin(2*g))*D2R, eps = (23.439 - 4e-7*n)*D2R;
+  return [Math.cos(lam), Math.cos(eps)*Math.sin(lam), Math.sin(eps)*Math.sin(lam)];
+}
+function lit(p, s){
+  const d = p.x*s[0] + p.y*s[1] + p.z*s[2];
+  if (d > 0) return true;
+  return Math.hypot(p.x - d*s[0], p.y - d*s[1], p.z - d*s[2]) > RE;
+}
+function obsSunSin(s, g){
+  const c = Math.cos(g), sn = Math.sin(g);
+  const x = s[0]*c + s[1]*sn, y = -s[0]*sn + s[1]*c, z = s[2];
+  return obs.up[0]*x + obs.up[1]*y + obs.up[2]*z;
+}
+function sample(rec, t){
+  const d = new Date(t), pv = S.propagate(rec, d);
+  if (!pv || !pv.position) return null;
+  const g = S.gstime(d), ecf = S.eciToEcf(pv.position, g), la = S.ecfToLookAngles(obs.gd, ecf);
+  return { t, el: la.elevation*R2D, az: ((la.azimuth*R2D)%360+360)%360, p: pv.position, g };
+}
+function findPasses(rec, t0, t1, minPeak){
+  const res = [];
+  let t = t0;
+  while (t < t1){
+    const s = sample(rec, t);
+    if (!s || s.el < 10){ t += 60000; continue; }
+    const pts = [];
+    for (let u = t - 60000; u < t + 40*60000; u += 10000){
+      const q = sample(rec, u);
+      if (!q) break;
+      if (q.el >= 10){ const sd = sunDir(u); q.vis = lit(q.p, sd) && obsSunSin(sd, q.g) < DARK; pts.push(q); }
+      else if (pts.length) break;
+    }
+    if (!pts.length){ t += 60000; continue; }
+    const v = pts.filter(q => q.vis);
+    if (v.length){
+      let pk = v[0]; for (const q of v) if (q.el > pk.el) pk = q;
+      if (pk.el >= minPeak) res.push({ start: v[0].t, end: v[v.length-1].t, startAz: v[0].az, endAz: v[v.length-1].az,
+        peakT: pk.t, peakEl: pk.el, peakAz: pk.az });
+    }
+    t = pts[pts.length-1].t + 60000;
+  }
+  return res;
+}
+function findTrains(list){
+  const yy = String(new Date().getUTCFullYear() % 100).padStart(2,'0'), groups = {};
+  for (const s of list){ const k = s.l1.substring(9,14); if (k.startsWith(yy)) (groups[k] = groups[k] || []).push(s); }
+  const out = [];
+  for (const k in groups){
+    const g = groups[k]; if (g.length < 10) continue;
+    const mm = g.map(s => parseFloat(s.l2.substring(52,63))).sort((a,b) => a-b);
+    if (mm[mm.length >> 1] < 15.45) continue; // already raised to working height: no longer a train
+    out.push({ k, num: parseInt(k.substring(2),10), members: g });
+  }
+  out.sort((a,b) => b.num - a.num);
+  return out.slice(0,3);
+}
+function toThree(p, g, arr, o){
+  const c = Math.cos(g), s = Math.sin(g);
+  const x = p.x*c + p.y*s, y = -p.x*s + p.y*c;
+  arr[o] = x/RE; arr[o+1] = p.z/RE; arr[o+2] = -y/RE;
+}
+function positions(list, t){
+  const d = new Date(t), g = S.gstime(d), arr = new Float32Array(list.length*3);
+  for (let i = 0; i < list.length; i++){
+    const pv = S.propagate(list[i].rec, d);
+    if (pv && pv.position) toThree(pv.position, g, arr, i*3);
+  }
+  return arr;
+}
+function computePasses(){
+  if (!obs) return;
+  const now = Date.now(), t0 = now - 20*60000, t1 = now + 24*3600000, out = [];
+  main.forEach((s, i) => {
+    if (s.kind === 'train') return;
+    const minPeak = (s.kind === 'iss' || s.kind === 'css') ? 10 : 25;
+    for (const p of findPasses(s.rec, t0, t1, minPeak)) out.push(Object.assign(p, { idx: i, kind: s.kind }));
+  });
+  trains.forEach(tr => {
+    for (const p of findPasses(tr.rep.rec, t0, t1, 15)) out.push(Object.assign(p, { idx: tr.repIdx, kind: 'train', train: tr.ti }));
+  });
+  out.sort((a,b) => a.start - b.start);
+  postMessage({ type: 'passes', passes: out.filter(p => p.end > now), at: now });
+}
+function tickMain(){
+  if (!paused && main.length){ const a = positions(main, Date.now() + 500); postMessage({ type: 'pos', main: a }, [a.buffer]); }
+}
+function tickSl(){
+  if (!paused && slOn && sl.length){ const a = positions(sl, Date.now() + 1000); postMessage({ type: 'pos', sl: a }, [a.buffer]); }
+}
+onmessage = e => {
+  const m = e.data;
+  if (m.type === 'init'){
+    const seen = new Set();
+    for (const s of parse(m.visual).concat(parse(m.stations).filter(s => s.id === '25544' || /TIANHE/.test(s.name)))){
+      if (seen.has(s.id)) continue; seen.add(s.id);
+      s.kind = kindOf(s); s.year = yearOf(s.l1); main.push(s);
+    }
+    sl = parse(m.starlink);
+    trains = findTrains(sl).map((tr, ti) => {
+      const base = main.length;
+      tr.members.forEach(s => { s.kind = 'train'; s.train = ti; s.year = yearOf(s.l1); main.push(s); });
+      const mid = tr.members.length >> 1;
+      return { ti, rep: tr.members[mid], repIdx: base + mid, size: tr.members.length };
+    });
+    postMessage({ type: 'ready', sats: main.map(s => ({ id: s.id, name: s.name, kind: s.kind, year: s.year, train: s.train ?? -1 })),
+      slCount: sl.length, trains: trains.map(t => ({ ti: t.ti, repIdx: t.repIdx, size: t.size })) });
+    tickMain();
+    setInterval(tickMain, 500);
+    setInterval(tickSl, 1000);
+  } else if (m.type === 'obs'){
+    const lat = m.lat*D2R, lon = m.lon*D2R;
+    obs = { gd: { latitude: lat, longitude: lon, height: (m.alt || 0)/1000 },
+      up: [Math.cos(lat)*Math.cos(lon), Math.cos(lat)*Math.sin(lon), Math.sin(lat)] };
+    computePasses();
+    clearInterval(passTimer); passTimer = setInterval(computePasses, 15*60000);
+  } else if (m.type === 'sl'){
+    slOn = m.on; tickSl();
+  } else if (m.type === 'path'){
+    const s = main[m.idx]; if (!s) return;
+    const n = 191, arr = new Float32Array(n*3), now = Date.now();
+    for (let i = 0; i < n; i++){
+      const d = new Date(now + i*30000), pv = S.propagate(s.rec, d);
+      if (pv && pv.position) toThree(pv.position, S.gstime(d), arr, i*3);
+    }
+    postMessage({ type: 'path', idx: m.idx, pts: arr }, [arr.buffer]);
+  } else if (m.type === 'pause'){
+    paused = m.on; if (!paused){ tickMain(); tickSl(); }
+  }
+};
+</script>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = s => document.querySelector(s);
+const D2R = Math.PI/180;
+const TEX = 'https://unpkg.com/three-globe@2.31.0/example/img/';
+const state = { sats: [], passes: [], obs: null, sel: null, slOn: false, slCount: 0, trains: [], locError: null, dataError: false, worker: null, ready: false };
+
+/* ---------- renderer / scene ---------- */
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); }
+catch (e) { $('#ldMsg').textContent = 'This device could not start the 3D globe.'; throw e; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setClearColor(0x03050b, 1);
+$('#stage').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 300);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.06;
+controls.enablePan = false; controls.zoomSpeed = 0.8; controls.minDistance = 1.22;
+controls.rotateSpeed = 0.4; controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+let baseDist = 3.4;
+const flyDist = () => baseDist*(window.innerWidth >= 900 ? 0.92 : 0.72);
+
+function layout(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h;
+  const half = Math.atan(Math.tan(camera.fov*D2R/2) * Math.min(1, w/h));
+  baseDist = 1.06/Math.sin(half);
+  controls.maxDistance = baseDist*1.35;
+  const shift = w < 900 ? h*0.12 : 0;
+  camera.setViewOffset(w, h, 0, shift, w, h);
+  camera.updateProjectionMatrix();
+  sprMat.forEach(m => m.uniforms && (m.uniforms.pr.value = renderer.getPixelRatio()));
+}
+const sprMat = [];
+
+function ll2v(lat, lon, r = 1){
+  const a = lat*D2R, b = lon*D2R;
+  return new THREE.Vector3(r*Math.cos(a)*Math.cos(b), r*Math.sin(a), -r*Math.cos(a)*Math.sin(b));
+}
+function gmst(t){
+  const jd = t/86400000 + 2440587.5, T = (jd - 2451545)/36525;
+  let g = 280.46061837 + 360.98564736629*(jd - 2451545) + 0.000387933*T*T;
+  return ((g % 360) + 360) % 360 * D2R;
+}
+function sunVec(t){
+  const n = t/86400000 + 2440587.5 - 2451545;
+  const L = (280.460 + 0.9856474*n)*D2R, g = (357.528 + 0.9856003*n)*D2R;
+  const lam = L + (1.915*Math.sin(g) + 0.020*Math.sin(2*g))*D2R, eps = (23.439 - 4e-7*n)*D2R;
+  const x = Math.cos(lam), y = Math.cos(eps)*Math.sin(lam), z = Math.sin(eps)*Math.sin(lam);
+  const G = gmst(t), c = Math.cos(G), s = Math.sin(G);
+  const X = x*c + y*s, Y = -x*s + y*c;
+  return new THREE.Vector3(X, z, -Y).normalize();
+}
+
+/* ---------- Earth ---------- */
+const manager = new THREE.LoadingManager();
+const loader = new THREE.TextureLoader(manager);
+loader.setCrossOrigin('anonymous');
+const aniso = renderer.capabilities.getMaxAnisotropy();
+function tex(n){ const t = loader.load(TEX + n); t.anisotropy = Math.min(8, aniso); return t; }
+const sun = { value: sunVec(Date.now()) };
+const earthMat = new THREE.ShaderMaterial({
+  uniforms: { dayMap: { value: tex('earth-blue-marble.jpg') }, nightMap: { value: tex('earth-night.jpg') },
+    specMap: { value: tex('earth-water.png') }, sunDir: sun },
+  vertexShader: `
+    varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+    void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position,1.); vW = w.xyz;
+      gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `
+    uniform sampler2D dayMap, nightMap, specMap; uniform vec3 sunDir;
+    varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+    void main(){
+      vec3 n = normalize(vN); vec3 v = normalize(cameraPosition - vW);
+      float d = dot(n, sunDir);
+      float day = smoothstep(-0.10, 0.22, d);
+      vec3 dayC = texture2D(dayMap, vUv).rgb;
+      dayC = pow(dayC, vec3(1.08)) * (0.18 + 1.05*clamp(d + 0.15, 0., 1.));
+      vec3 city = texture2D(nightMap, vUv).rgb;
+      float lum = dot(city, vec3(.299,.587,.114));
+      vec3 nightC = vec3(1.0,0.72,0.36) * pow(lum, 1.6) * 2.4 + texture2D(dayMap, vUv).rgb * vec3(0.05,0.06,0.09) + vec3(0.006,0.010,0.022);
+      vec3 col = mix(nightC, dayC, day);
+      float water = texture2D(specMap, vUv).r;
+      vec3 h = normalize(sunDir + v);
+      col += vec3(1.0,0.92,0.78) * pow(max(dot(n,h),0.), 140.) * water * day * 0.18;
+      float fres = pow(1. - max(dot(n, v), 0.), 2.6);
+      col += vec3(0.32,0.58,1.0) * fres * (0.05 + 0.5*smoothstep(-0.25, 0.6, d));
+      float tw = exp(-pow((d + 0.02)*7., 2.));
+      col += vec3(1.0,0.42,0.12) * tw * 0.07 * (0.3 + fres);
+      gl_FragColor = vec4(col, 1.);
+    }`
+});
+const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 160, 120), earthMat);
+scene.add(earth);
+
+const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.085, 96, 72), new THREE.ShaderMaterial({
+  uniforms: { sunDir: sun }, side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `varying vec3 vNv; varying vec3 vNw;
+    void main(){ vNv = normalize(normalMatrix * normal); vNw = normalize(mat3(modelMatrix) * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }`,
+  fragmentShader: `uniform vec3 sunDir; varying vec3 vNv; varying vec3 vNw;
+    void main(){ float f = clamp(-vNv.z * 2.55, 0., 1.); float g = pow(f, 3.2);
+      float d = dot(normalize(-vNw), sunDir);
+      vec3 c = mix(vec3(0.04,0.07,0.2), vec3(0.36,0.62,1.0), smoothstep(-0.45, 0.35, d));
+      gl_FragColor = vec4(c * g * 0.85, 1.); }`
+}));
+scene.add(atmo);
+
+/* ---------- stars ---------- */
+(function(){
+  const n = 7000, pos = new Float32Array(n*3), col = new Float32Array(n*3), sz = new Float32Array(n);
+  for (let i = 0; i < n; i++){
+    const u = Math.random()*2 - 1, th = Math.random()*Math.PI*2, s = Math.sqrt(1 - u*u), r = 120;
+    pos[i*3] = r*s*Math.cos(th); pos[i*3+1] = r*u; pos[i*3+2] = r*s*Math.sin(th);
+    const m = Math.pow(Math.random(), 7), b = 0.28 + 0.72*Math.pow(Math.random(), 3);
+    sz[i] = 1.1 + m*3.4;
+    const warm = Math.random();
+    col[i*3] = b*(warm > .8 ? 1.0 : .82); col[i*3+1] = b*(warm > .8 ? .9 : .88); col[i*3+2] = b*(warm > .8 ? .78 : 1.0);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('size', new THREE.BufferAttribute(sz, 1));
+  const m = pointMat(1.0); m.depthTest = true;
+  scene.add(new THREE.Points(g, m));
+})();
+
+function pointMat(alpha){
+  const m = new THREE.ShaderMaterial({
+    uniforms: { pr: { value: renderer.getPixelRatio() }, alpha: { value: alpha } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `attribute float size; attribute vec3 color; varying vec3 vC; uniform float pr;
+      void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = size * pr; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `varying vec3 vC; uniform float alpha;
+      void main(){ float d = length(gl_PointCoord - .5) * 2.; if (d > 1.) discard;
+        float core = smoothstep(.45, .0, d); float halo = pow(1. - d, 2.2) * .55;
+        gl_FragColor = vec4(vC * (core + halo) * alpha, 1.); }`
+  });
+  sprMat.push(m);
+  return m;
+}
+
+/* ---------- satellites ---------- */
+let mainGeo, mainPrev, mainNext, mainCur, mainT0 = 0;
+let slGeo, slPts, slPrev, slNext, slCur, slT0 = 0;
+const COL = { base: [0.62,0.70,0.86], gold: [1.0,0.74,0.30], iss: [1.0,0.86,0.55] };
+
+function buildMain(n){
+  mainCur = new Float32Array(n*3); mainPrev = new Float32Array(n*3); mainNext = new Float32Array(n*3);
+  mainGeo = new THREE.BufferGeometry();
+  mainGeo.setAttribute('position', new THREE.BufferAttribute(mainCur, 3).setUsage(THREE.DynamicDrawUsage));
+  mainGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n*3), 3));
+  mainGeo.setAttribute('size', new THREE.BufferAttribute(new Float32Array(n), 1));
+  const pts = new THREE.Points(mainGeo, pointMat(1.0)); pts.frustumCulled = false; pts.renderOrder = 3;
+  scene.add(pts);
+  recolor();
+}
+function recolor(){
+  if (!mainGeo) return;
+  const c = mainGeo.attributes.color.array, s = mainGeo.attributes.size.array;
+  const hot = new Set(curated().map(p => p.idx));
+  const hotTrain = new Set(state.passes.filter(p => p.kind === 'train').map(p => p.train));
+  state.sats.forEach((sat, i) => {
+    let col = COL.base, size = 4.2;
+    if (sat.kind === 'train'){ col = hotTrain.has(sat.train) ? COL.gold : [0.75,0.82,1.0]; size = 4.6; }
+    else if (sat.kind === 'iss'){ col = COL.iss; size = 12; }
+    else if (hot.has(i)){ col = COL.gold; size = 8; }
+    if (state.sel && state.sel.t === 'm' && state.sel.i === i) size *= 1.5;
+    c.set(col, i*3); s[i] = size;
+  });
+  mainGeo.attributes.color.needsUpdate = true; mainGeo.attributes.size.needsUpdate = true;
+}
+function buildSl(n){
+  slCur = new Float32Array(n*3); slPrev = new Float32Array(n*3); slNext = new Float32Array(n*3);
+  slGeo = new THREE.BufferGeometry();
+  slGeo.setAttribute('position', new THREE.BufferAttribute(slCur, 3).setUsage(THREE.DynamicDrawUsage));
+  const col = new Float32Array(n*3), sz = new Float32Array(n);
+  for (let i = 0; i < n; i++){ col[i*3] = .55; col[i*3+1] = .66; col[i*3+2] = .85; sz[i] = 2.6; }
+  slGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  slGeo.setAttribute('size', new THREE.BufferAttribute(sz, 1));
+  slPts = new THREE.Points(slGeo, pointMat(0.0)); slPts.frustumCulled = false; slPts.renderOrder = 2; slPts.visible = false;
+  scene.add(slPts);
+}
+let slHasData = false;
+
+/* ring sprites (ISS + selection) */
+function ringTexture(){
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.strokeStyle = 'rgba(255,216,138,1)'; x.lineWidth = 6;
+  x.beginPath(); x.arc(64, 64, 46, 0, Math.PI*2); x.stroke();
+  const t = new THREE.CanvasTexture(c); return t;
+}
+const ringTex = ringTexture();
+function ringSprite(scale){
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: false }));
+  s.scale.set(scale, scale, 1); s.visible = false; s.renderOrder = 4; scene.add(s); return s;
+}
+const issRing = ringSprite(0.05), selRing = ringSprite(0.06);
+
+/* path line */
+const pathGeo = new THREE.BufferGeometry();
+const pathLine = new THREE.Line(pathGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+pathLine.visible = false; pathLine.frustumCulled = false; scene.add(pathLine);
+let pathFade = 0;
+function setPath(pts){
+  const n = pts.length/3, col = new Float32Array(n*3);
+  for (let i = 0; i < n; i++){ const k = Math.pow(1 - i/n, 1.3); col[i*3] = 1.0*k; col[i*3+1] = .76*k; col[i*3+2] = .36*k; }
+  pathGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+  pathGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  pathGeo.computeBoundingSphere();
+  pathLine.visible = true; pathFade = 0;
+}
+
+/* home pin */
+const home = new THREE.Group(); home.visible = false; scene.add(home);
+const pinMat = new THREE.MeshBasicMaterial({ color: 0xffd88a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+const pinDot = new THREE.Mesh(new THREE.CircleGeometry(0.35, 32), pinMat);
+const pinRing = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.74, 64), pinMat.clone());
+const pulse = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 64), pinMat.clone());
+home.add(pinDot, pinRing, pulse);
+
+/* ---------- camera fly ---------- */
+let fly = null;
+const ease = k => k < .5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3)/2;
+function flyTo(dir, dist, dur = 2400){
+  const q0 = camera.position.clone().normalize(), q1 = dir.clone().normalize();
+  fly = { q0, q1, d0: camera.position.length(), d1: dist, t0: performance.now(), dur };
+  controls.enabled = false; controls.autoRotate = false;
+}
+function stepFly(now){
+  if (!fly) return;
+  let k = Math.min(1, (now - fly.t0)/fly.dur); const e = ease(k);
+  const a = Math.acos(Math.min(1, Math.max(-1, fly.q0.dot(fly.q1))));
+  let v;
+  if (a < 1e-4) v = fly.q1.clone();
+  else v = fly.q0.clone().multiplyScalar(Math.sin((1-e)*a)/Math.sin(a)).add(fly.q1.clone().multiplyScalar(Math.sin(e*a)/Math.sin(a)));
+  const lift = Math.sin(Math.PI*e) * Math.min(0.6, a*0.35);
+  camera.position.copy(v.normalize().multiplyScalar(fly.d0 + (fly.d1 - fly.d0)*e + lift));
+  camera.lookAt(0,0,0);
+  if (k >= 1){ fly = null; controls.enabled = true; controls.update(); }
+}
+camera.position.copy(ll2v(18, -40, 1).multiplyScalar(4));
+
+/* ---------- worker ---------- */
+function startWorker(tles){
+  const blob = new Blob([$('#workerSrc').textContent], { type: 'text/javascript' });
+  const w = new Worker(URL.createObjectURL(blob));
+  state.worker = w;
+  w.onmessage = e => {
+    const m = e.data;
+    if (m.type === 'ready'){
+      state.sats = m.sats; state.slCount = m.slCount; state.trains = m.trains;
+      buildMain(m.sats.length); buildSl(m.slCount);
+      if (!m.slCount) $('#slBtn').style.display = 'none';
+      if (state.obs) w.postMessage({ type: 'obs', ...state.obs });
+      maybeReveal();
+    } else if (m.type === 'pos'){
+      const now = performance.now();
+      if (m.main){
+        if (!mainT0){ mainCur.set(m.main); mainPrev.set(m.main); }
+        else mainPrev.set(mainCur);
+        mainNext = m.main; mainT0 = now;
+      }
+      if (m.sl){
+        if (!slHasData){ slCur.set(m.sl); slPrev.set(m.sl); slHasData = true; }
+        else slPrev.set(slCur);
+        slNext = m.sl; slT0 = now;
+      }
+    } else if (m.type === 'passes'){
+      state.passes = m.passes; state.passesReady = true;
+      recolor(); renderCard(); renderList();
+    } else if (m.type === 'path'){
+      if (state.sel && state.sel.t === 'm' && state.sel.i === m.idx) setPath(m.pts);
+    }
+  };
+  w.postMessage({ type: 'init', ...tles });
+}
+
+/* ---------- data ---------- */
+async function getTLE(group, alt){
+  const url = alt || `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`;
+  let cache = null, hit = null, age = Infinity;
+  try { cache = await caches.open('overhead-tle-v1'); hit = await cache.match(url); if (hit) age = Date.now() - Number(hit.headers.get('x-saved') || 0); } catch (e) {}
+  if (hit && age < 2*3600e3) return hit.text();
+  try {
+    const r = await fetch(url, { cache: 'no-store' }); const t = await r.text();
+    if (r.ok && /^1 /m.test(t)){
+      try { if (cache) await cache.put(url, new Response(t, { headers: { 'x-saved': String(Date.now()), 'content-type': 'text/plain' } })); } catch (e) {}
+      return t;
+    }
+  } catch (e) {}
+  if (hit) return hit.text();
+  return (!alt && group === 'starlink') ? getTLE(group, 'https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=starlink&FORMAT=tle') : '';
+}
+async function loadData(){
+  const [visual, stations, starlink] = await Promise.all([getTLE('visual'), getTLE('stations'), getTLE('starlink')]);
+  if (!visual && !stations){ state.dataError = true; renderCard(); maybeReveal(true); return; }
+  startWorker({ visual, stations, starlink });
+}
+
+/* ---------- location ---------- */
+function askLocation(){
+  if (!navigator.geolocation){ state.locError = 'none'; renderCard(); return; }
+  state.locating = true; renderCard();
+  navigator.geolocation.getCurrentPosition(p => {
+    state.locating = false; state.locError = null;
+    state.obs = { lat: p.coords.latitude, lon: p.coords.longitude, alt: p.coords.altitude || 0 };
+    placeHome();
+    if (state.worker && state.sats.length) state.worker.postMessage({ type: 'obs', ...state.obs });
+    renderCard();
+  }, err => {
+    state.locating = false; state.locError = err.code === 1 ? 'denied' : 'fail'; renderCard();
+  }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 10*60000 });
+}
+function placeHome(){
+  const p = ll2v(state.obs.lat, state.obs.lon, 1.0015);
+  home.position.copy(p); home.lookAt(p.clone().multiplyScalar(2)); home.visible = true;
+  if (revealed) flyTo(p, flyDist(), 2800);
+  else pendingFly = true;
+}
+let pendingFly = false;
+
+/* ---------- words ---------- */
+const DIRS = ['North','Northeast','East','Southeast','South','Southwest','West','Northwest'];
+const dir = az => DIRS[Math.round(az/45) % 8];
+const height = el => el < 25 ? 'low in the sky' : el < 55 ? 'halfway up' : 'high overhead';
+const climb = el => el < 25 ? 'stays low' : el < 55 ? 'climbs halfway up' : 'passes high overhead';
+function friendly(s){
+  if (!s) return 'Satellite';
+  if (s.kind === 'iss') return 'International Space Station';
+  if (s.kind === 'css') return 'Chinese Space Station';
+  if (s.kind === 'hst') return 'Hubble Space Telescope';
+  if (s.kind === 'train') return 'Starlink train';
+  if (s.kind === 'rb') return 'Old rocket stage';
+  const n = s.name.replace(/\(.*?\)/g, '').replace(/\bDEB\b/, '').replace(/-(?=\d)/g, ' ').trim();
+  return n.split(/\s+/).map(w => (/\d/.test(w) || /^[A-Z]{2,4}$/.test(w)) ? w : w.split('-').map(x => x.charAt(0) + x.slice(1).toLowerCase()).join('-')).join(' ') || 'Satellite';
+}
+function blurb(s){
+  switch (s.kind){
+    case 'iss': return 'Astronauts live on board, about 250 miles up. The brightest thing that moves across the night sky.';
+    case 'css': return "China's space station, with astronauts on board. Bright and steady, it never blinks.";
+    case 'hst': return 'The famous space telescope, about 330 miles up. Launched in 1990.';
+    case 'train': return 'A fresh batch of Starlink satellites flying in a line, like a string of lights.';
+    case 'rb': return `The leftover top of a rocket${s.year ? `, launched in ${s.year}` : ''}. It tumbles, so it can flicker.`;
+    case 'sl': return "One of SpaceX's Starlink internet satellites. Thousands of them circle the Earth.";
+    default: return `A satellite${s.year ? ` launched in ${s.year}` : ''}, bright enough to see with no telescope.`;
+  }
+}
+function chip(p){
+  if (p.kind === 'iss') return 'Very bright';
+  if (p.kind === 'css') return 'Bright';
+  if (p.kind === 'train') return 'String of lights';
+  return p.peakEl >= 60 ? 'Bright' : 'Easy to see';
+}
+function hm(t){ const d = new Date(t); let h = d.getHours(); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return { t: `${h}:${String(d.getMinutes()).padStart(2,'0')}`, ap }; }
+function dayWord(t){
+  const d = new Date(t), n = new Date(), h = d.getHours();
+  const tm = new Date(n); tm.setDate(n.getDate() + 1);
+  if (d.toDateString() === n.toDateString()) return h >= 17 ? 'Tonight' : h < 5 ? 'Early this morning' : h < 12 ? 'This morning' : 'This afternoon';
+  if (d.toDateString() === tm.toDateString()) return (h < 5 && n.getHours() >= 17) ? 'Late tonight' : h < 12 ? 'Tomorrow morning' : h >= 17 ? 'Tomorrow night' : 'Tomorrow';
+  return d.toLocaleDateString([], { weekday: 'long' });
+}
+function shortDay(t){
+  const d = new Date(t), n = new Date(), tm = new Date(n); tm.setDate(n.getDate() + 1);
+  if (d.toDateString() === n.toDateString()) return d.getHours() >= 17 ? 'TONIGHT' : 'TODAY';
+  if (d.toDateString() === tm.toDateString()) return (d.getHours() < 5 && n.getHours() >= 17) ? 'TONIGHT' : 'TOMORROW';
+  return d.toLocaleDateString([], { weekday: 'short' }).toUpperCase();
+}
+function until(p){
+  const now = Date.now();
+  if (now >= p.start && now <= p.end) return { txt: 'Up now', now: true };
+  const m = Math.round((p.start - now)/60000);
+  if (m < 1) return { txt: 'in under a minute' };
+  if (m < 60) return { txt: `in ${m} min` };
+  return { txt: `in ${Math.floor(m/60)} h ${m % 60} min` };
+}
+function curated(){
+  const now = Date.now(), special = p => ['iss','css','train','hst'].includes(p.kind);
+  let keep = state.passes.filter(p => p.end > now && (special(p) || (p.peakEl >= 45 && (p.end - p.start) >= 180000)));
+  if (keep.length > 10){
+    const sp = keep.filter(special), eve = p => { const h = new Date(p.start).getHours(); return h >= 18 || h < 1 ? 60 : 0; }, score = p => p.peakEl + (p.end - p.start)/20000 + eve(p);
+    keep = sp.concat(keep.filter(p => !special(p)).sort((a,b) => score(b) - score(a)).slice(0, Math.max(0, 10 - sp.length)));
+  }
+  return keep.sort((a,b) => a.start - b.start);
+}
+const mins = p => Math.max(1, Math.round((p.end - p.start)/60000));
+const lookAz = p => p.peakEl >= 70 ? p.startAz : p.peakAz;
+const lookWords = p => p.peakEl >= 70 ? `Look ${dir(p.startAz)}, then straight up` : `Look ${dir(p.peakAz)}, ${height(p.peakEl)}`;
+function pathWords(p){ return `Appears in the ${dir(p.startAz)}, ${climb(p.peakEl)}, and fades in the ${dir(p.endAz)}. Visible for about ${mins(p)} minute${mins(p) > 1 ? 's' : ''}.`; }
+function satForPass(p){ return state.sats[p.idx]; }
+function nameForPass(p){ return friendly(satForPass(p)); }
+
+/* ---------- card ---------- */
+let cardKey = '';
+function compassSvg(az){
+  return `<div class="compass"><b>N</b><svg viewBox="0 0 46 46" style="transform:rotate(${az}deg)">
+    <path d="M23 9 L28 25 L23 22 L18 25 Z" fill="#ffd88a"/><circle cx="23" cy="23" r="2.2" fill="#ffd88a" opacity=".6"/></svg></div>`;
+}
+function passBlock(p){
+  const T = hm(p.start), u = until(p);
+  return `<div class="timerow"><div class="time">${T.t}<small>${T.ap}</small></div>
+      <div class="when"><div class="d">${dayWord(p.start)}</div><div class="c ${u.now ? 'now' : ''}" data-count>${u.txt}</div></div></div>
+    <div class="look">${compassSvg(lookAz(p))}<div>${lookWords(p)}</div></div>
+    <div class="path">${pathWords(p)}</div>`;
+}
+function renderCard(){
+  const el = $('#cardInner'); let html, key;
+  const next = curated()[0];
+  if (state.dataError){
+    key = 'err';
+    html = `<div class="eyebrow">Overhead</div><div class="name">Can't reach the satellite data</div>
+      <div class="empty">Check your connection and try again.</div>
+      <div class="actions"><button class="btn gold" data-act="reload">Try again</button></div>`;
+  } else if (state.sel){
+    const s = state.sel.t === 'm' ? state.sats[state.sel.i] : { kind: 'sl', name: 'Starlink' };
+    const nm = state.sel.t === 'm' ? friendly(s) : 'Starlink satellite';
+    const p = state.sel.t === 'm' ? state.passes.find(q => (q.idx === state.sel.i || (s.kind === 'train' && q.train === s.train)) && q.end > Date.now()) : null;
+    key = 'sel' + state.sel.t + state.sel.i + (p ? p.start : 'x');
+    html = `<div class="eyebrow"><span>${p ? 'Next time over you' : 'Satellite'}</span>${p ? `<span class="chip">${chip(p)}</span>` : ''}</div>
+      <div class="name">${nm}</div><div class="empty" style="margin-top:6px">${blurb(s)}</div>
+      ${p ? passBlock(p) : `<div class="empty" style="color:var(--faint)">${state.obs ? "You won't be able to see this one in the next day." : ''}</div>`}
+      <div class="actions"><button class="btn slim" data-act="back">Back</button><button class="btn gold" data-act="list">Full list</button></div>`;
+  } else if (!state.obs){
+    key = 'loc' + state.locError + state.locating;
+    html = state.locating
+      ? `<div class="eyebrow">Next over you</div><div class="name">Finding where you are</div><div class="skel" style="width:70%"></div><div class="skel" style="width:45%"></div>`
+      : `<div class="eyebrow">Next over you</div><div class="name">Where are you?</div>
+        <div class="empty">${state.locError === 'denied'
+          ? 'Location is turned off for this page. On iPhone: Settings, Privacy, Location Services, Safari Websites, then allow.'
+          : 'Share your location so we can show what flies over you tonight. It stays on your phone.'}</div>
+        <div class="actions"><button class="btn gold" data-act="loc">Use my location</button></div>`;
+  } else if (!state.passesReady){
+    key = 'calc';
+    html = `<div class="eyebrow">Next over you</div><div class="name">Working out tonight's sky</div><div class="skel" style="width:80%"></div><div class="skel" style="width:55%"></div>`;
+  } else if (!next){
+    key = 'none';
+    html = `<div class="eyebrow">Next over you</div><div class="name">Nothing bright in the next day</div>
+      <div class="empty">Check back tomorrow. Spin the globe to watch everything in orbit.</div>`;
+  } else {
+    key = 'next' + next.idx + next.start;
+    const more = curated().length;
+    html = `<div class="eyebrow"><span>Next over you</span><span class="chip">${chip(next)}</span></div>
+      <div class="name">${nameForPass(next)}</div>${passBlock(next)}
+      <div class="actions"><button class="btn gold" data-act="list">See all ${more} coming up</button></div>`;
+  }
+  if (key === cardKey) return;
+  const first = !cardKey; cardKey = key;
+  if (first){ el.innerHTML = html; return; }
+  el.classList.add('swap');
+  setTimeout(() => { el.innerHTML = html; el.classList.remove('swap'); }, 260);
+}
+setInterval(() => {
+  const n = $('[data-count]');
+  if (!n) return;
+  const p = state.sel && state.sel.t === 'm'
+    ? state.passes.find(q => (q.idx === state.sel.i || (state.sats[state.sel.i].kind === 'train' && q.train === state.sats[state.sel.i].train)) && q.end > Date.now())
+    : curated()[0];
+  if (!p){ cardKey = ''; renderCard(); return; }
+  const u = until(p); n.textContent = u.txt; n.classList.toggle('now', !!u.now);
+  renderCard();
+}, 1000);
+
+$('#card').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a === 'list') openSheet();
+  else if (a === 'back') select(null);
+  else if (a === 'loc') askLocation();
+  else if (a === 'reload') location.reload();
+});
+
+/* ---------- sheet ---------- */
+function renderList(){
+  const now = Date.now(), items = curated();
+  $('#list').innerHTML = items.length ? items.map(p => {
+    const T = hm(p.start), live = now >= p.start;
+    return `<button class="row ${live ? 'live' : ''}" data-i="${p.idx}"><div class="t">${T.t}<small>${live ? 'UP NOW' : T.ap + ' ' + shortDay(p.start)}</small></div>
+      <div><div class="n">${nameForPass(p)}</div><div class="l">${lookWords(p)}</div></div>
+      <span class="chip">${chip(p)}</span></button>`;
+  }).join('') : `<div class="none">${state.obs ? 'Nothing bright passes over you in the next day.' : 'Share your location to see what flies over you.'}</div>`;
+}
+function openSheet(){ renderList(); $('#sheet').classList.add('show'); $('#scrim').classList.add('show'); }
+function closeSheet(){ $('#sheet').classList.remove('show'); $('#scrim').classList.remove('show'); }
+$('#scrim').onclick = closeSheet; $('#sheetX').onclick = closeSheet;
+$('#list').addEventListener('click', e => {
+  const r = e.target.closest('.row'); if (!r) return;
+  closeSheet(); select({ t: 'm', i: +r.dataset.i }, true);
+});
+function swipe(el, onUp, onDown){
+  let y0 = null;
+  el.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
+    if (dy < -40 && onUp) onUp(); if (dy > 60 && onDown) onDown();
+  }, { passive: true });
+}
+swipe($('#card'), () => { if (state.obs) openSheet(); });
+swipe($('#sheet').querySelector('.grab'), null, closeSheet);
+swipe($('#sheet').querySelector('header'), null, closeSheet);
+
+/* ---------- selection / picking ---------- */
+function select(sel, fly){
+  state.sel = sel;
+  pathLine.visible = false;
+  if (sel && sel.t === 'm'){
+    state.worker.postMessage({ type: 'path', idx: sel.i });
+    if (fly){ const v = new THREE.Vector3().fromArray(mainCur, sel.i*3); flyTo(v, Math.max(1.9, Math.min(camera.position.length(), flyDist())), 2000); }
+  }
+  recolor(); renderCard();
+}
+setInterval(() => { if (state.sel && state.sel.t === 'm' && state.worker) state.worker.postMessage({ type: 'path', idx: state.sel.i }); }, 60000);
+
+const tmp = new THREE.Vector3();
+function inFront(p){
+  const c = camera.position, d = tmp.copy(p).sub(c); const L = d.length(); d.divideScalar(L);
+  const b = c.dot(d), disc = b*b - (c.lengthSq() - 1);
+  if (disc < 0) return true;
+  const t = -b - Math.sqrt(disc);
+  return t < 0 || t > L;
+}
+function toScreen(p){
+  const v = p.clone().project(camera);
+  return { x: (v.x + 1)/2*window.innerWidth, y: (1 - v.y)/2*window.innerHeight, z: v.z };
+}
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; controls.autoRotate = false; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down) return; const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t; down = null;
+  if (moved > 8 || dt > 450 || !mainCur) return;
+  let best = null, bd = 30;
+  const test = (arr, n, t) => {
+    const v = new THREE.Vector3();
+    for (let i = 0; i < n; i++){
+      v.fromArray(arr, i*3); if (!v.x && !v.y && !v.z) continue;
+      const s = toScreen(v); if (s.z > 1) continue;
+      const d = Math.hypot(s.x - e.clientX, s.y - e.clientY);
+      if (d < bd && inFront(v)){ bd = d; best = { t, i }; }
+    }
+  };
+  test(mainCur, state.sats.length, 'm');
+  if (!best && state.slOn && slHasData) test(slCur, state.slCount, 's');
+  if (best) select(best, false);
+  else if (state.sel) select(null);
+});
+
+/* ---------- Starlink toggle ---------- */
+let slAlpha = 0;
+$('#slBtn').onclick = () => {
+  state.slOn = !state.slOn;
+  $('#slBtn').classList.toggle('on', state.slOn); $('#slBtn').setAttribute('aria-pressed', state.slOn);
+  if (state.worker) state.worker.postMessage({ type: 'sl', on: state.slOn });
+  if (!state.slOn && state.sel && state.sel.t === 's') select(null);
+};
+
+/* ---------- labels ---------- */
+const lblIss = $('#lblIss'), lblSel = $('#lblSel'), lblYou = $('#lblYou');
+function placeLabel(el, p, show, dy = -22){
+  if (!show || !inFront(p)){ el.classList.remove('on'); return; }
+  const s = toScreen(p);
+  el.style.transform = `translate(${s.x}px, ${s.y + dy}px) translate(-50%, -50%)`;
+  el.classList.add('on');
+}
+
+/* ---------- reveal ---------- */
+let revealed = false, texturesDone = false;
+manager.onLoad = () => { texturesDone = true; maybeReveal(); };
+manager.onError = () => { texturesDone = true; maybeReveal(); };
+function maybeReveal(force){
+  if (revealed || !(force || (texturesDone && state.sats.length))) return;
+  revealed = true;
+  document.body.classList.add('ready'); $('#stage').classList.add('ready');
+  $('#loader').classList.add('hide');
+  setTimeout(() => $('#card').classList.add('show'), 500);
+  if (pendingFly && state.obs){ pendingFly = false; flyTo(ll2v(state.obs.lat, state.obs.lon), flyDist(), 3000); }
+}
+setTimeout(() => { if (!revealed && texturesDone) maybeReveal(true); }, 12000);
+
+/* ---------- loop ---------- */
+let raf = 0, lastSun = 0;
+function frame(now){
+  raf = requestAnimationFrame(frame);
+  if (now - lastSun > 1000){ sun.value.copy(sunVec(Date.now())); lastSun = now; }
+  if (mainCur && mainT0){
+    const k = Math.min(1, (now - mainT0)/500);
+    for (let i = 0; i < mainCur.length; i++) mainCur[i] = mainPrev[i] + (mainNext[i] - mainPrev[i])*k;
+    mainGeo.attributes.position.needsUpdate = true;
+  }
+  if (slPts){
+    slAlpha += ((state.slOn && slHasData ? 0.55 : 0) - slAlpha)*0.08;
+    slPts.material.uniforms.alpha.value = slAlpha; slPts.visible = slAlpha > 0.01;
+    if (slPts.visible && slT0){
+      const k = Math.min(1, (now - slT0)/1000);
+      for (let i = 0; i < slCur.length; i++) slCur[i] = slPrev[i] + (slNext[i] - slPrev[i])*k;
+      slGeo.attributes.position.needsUpdate = true;
+    }
+  }
+  const dist = camera.position.length();
+  controls.rotateSpeed = 0.12 + 0.32*Math.min(1, (dist - 1)/(baseDist - 1));
+  stepFly(now);
+  if (!fly) controls.update();
+
+  // ISS
+  const issI = state.sats.findIndex(s => s.kind === 'iss');
+  if (issI >= 0 && mainT0){
+    issRing.position.fromArray(mainCur, issI*3); issRing.visible = true;
+    const sc = 0.04 + 0.006*Math.sin(now/500); issRing.scale.set(sc, sc, 1);
+    placeLabel(lblIss, issRing.position, !(state.sel && state.sel.t === 'm' && state.sel.i === issI));
+  }
+  // selection
+  if (state.sel && (mainT0 || slT0)){
+    const arr = state.sel.t === 'm' ? mainCur : slCur;
+    selRing.position.fromArray(arr, state.sel.i*3); selRing.visible = true;
+    const sc = 0.055 + 0.01*Math.sin(now/350); selRing.scale.set(sc, sc, 1);
+    lblSel.textContent = state.sel.t === 'm' ? friendly(state.sats[state.sel.i]) : 'Starlink';
+    placeLabel(lblSel, selRing.position, true, -26);
+  } else { selRing.visible = false; lblSel.classList.remove('on'); }
+  if (pathLine.visible){ pathFade = Math.min(1, pathFade + 0.03); pathLine.material.opacity = pathFade; }
+  // home
+  if (home.visible){
+    const s = Math.max(0.006, dist*0.0068);
+    home.scale.setScalar(s);
+    const k = (now % 2200)/2200;
+    pulse.scale.setScalar(1 + k*2.2); pulse.material.opacity = 0.8*(1 - k);
+    placeLabel(lblYou, home.position, true, -24);
+  }
+  renderer.render(scene, camera);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){ cancelAnimationFrame(raf); raf = 0; state.worker && state.worker.postMessage({ type: 'pause', on: true }); }
+  else if (!raf){ state.worker && state.worker.postMessage({ type: 'pause', on: false }); raf = requestAnimationFrame(frame); }
+});
+window.addEventListener('resize', layout);
+controls.addEventListener('start', () => { controls.autoRotate = false; });
+
+layout();
+renderCard();
+raf = requestAnimationFrame(frame);
+loadData();
+askLocation();
+</script>
+</body>
+</html>
