@@ -21,111 +21,131 @@
 <style>
 :root{
   --bg:#03050b; --ink:#f5f0e6; --muted:rgba(245,240,230,.66); --faint:rgba(245,240,230,.42);
-  --gold:#f2b84b; --gold2:#ffd88a; --line:rgba(255,255,255,.09);
+  --gold:#f2b84b; --gold2:#ffd88a; --teal:#6ff0d6; --line:rgba(255,255,255,.09);
   --glass:rgba(13,17,29,.56);
   --safeT:env(safe-area-inset-top,0px); --safeB:env(safe-area-inset-bottom,0px);
-  --ease:cubic-bezier(.16,1,.3,1);
+  --ease:cubic-bezier(.16,1,.3,1); --spring:cubic-bezier(.22,1.18,.36,1);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--ink);overflow:hidden;
   font-family:Manrope,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none;
   -webkit-user-select:none;user-select:none}
 body{position:fixed;inset:0}
-button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:inherit}
 #stage{position:fixed;inset:0;touch-action:none}
 #stage canvas{display:block;width:100%;height:100%;opacity:0;transition:opacity 2s ease}
 #stage.ready canvas{opacity:1}
-.shade{position:fixed;left:0;right:0;bottom:0;height:46vh;pointer-events:none;z-index:2;
-  background:linear-gradient(180deg,rgba(3,5,11,0) 0%,rgba(3,5,11,.55) 55%,rgba(3,5,11,.85) 100%)}
-.shadeTop{position:fixed;left:0;right:0;top:0;height:22vh;pointer-events:none;z-index:2;
-  background:linear-gradient(0deg,rgba(3,5,11,0),rgba(3,5,11,.6))}
+.shadeTop{position:fixed;left:0;right:0;top:0;height:120px;pointer-events:none;z-index:2;
+  background:linear-gradient(0deg,rgba(3,5,11,0),rgba(3,5,11,.55))}
+#probe{position:fixed;bottom:0;height:0;padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none}
 
-/* top bar */
-.top{position:fixed;z-index:5;top:calc(var(--safeT) + 16px);left:16px;right:16px;display:flex;
-  justify-content:space-between;align-items:flex-start;gap:12px;pointer-events:none;
+/* header: small and out of the way */
+.top{position:fixed;z-index:5;top:calc(var(--safeT) + 12px);left:16px;right:16px;display:flex;
+  justify-content:space-between;align-items:center;gap:12px;pointer-events:none;
   opacity:0;transform:translateY(-10px);transition:opacity 1.2s var(--ease) .3s,transform 1.2s var(--ease) .3s}
 .ready .top{opacity:1;transform:none}
-.brand h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:38px;line-height:.95;letter-spacing:.2px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1;letter-spacing:.2px}
 .brand h1 em{color:var(--gold);font-style:italic}
-.brand p{font-size:14px;color:var(--muted);margin-top:6px;font-weight:500;letter-spacing:.2px}
-.pill{pointer-events:auto;display:flex;align-items:center;gap:10px;padding:10px 14px 10px 16px;border-radius:999px;
+.pill{pointer-events:auto;display:flex;align-items:center;gap:8px;padding:7px 9px 7px 12px;border-radius:999px;
   background:var(--glass);-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);
-  border:1px solid var(--line);font-size:14px;font-weight:700;white-space:nowrap;transition:background .4s,border-color .4s}
-.pill .sw{width:34px;height:20px;border-radius:10px;background:rgba(255,255,255,.18);position:relative;transition:background .4s}
-.pill .sw::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;
-  box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .45s var(--ease)}
+  border:1px solid var(--line);font-size:13px;font-weight:700;white-space:nowrap;transition:border-color .4s}
+.pill .sw{width:30px;height:18px;border-radius:9px;background:rgba(255,255,255,.18);position:relative;transition:background .4s}
+.pill .sw::after{content:"";position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .45s var(--spring)}
 .pill.on{border-color:rgba(242,184,75,.4)}
 .pill.on .sw{background:var(--gold)}
-.pill.on .sw::after{transform:translateX(14px)}
+.pill.on .sw::after{transform:translateX(12px)}
 
-/* main card */
-.card{position:fixed;z-index:6;left:16px;right:16px;bottom:calc(var(--safeB) + 16px);margin:0 auto;max-width:520px;
-  padding:20px 22px 18px;border-radius:30px;
-  background:linear-gradient(180deg,rgba(24,28,44,.72),rgba(9,11,20,.82));
+/* bottom sheet: peek / half / full */
+.sheet{position:fixed;z-index:6;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;
+  height:calc(100% - var(--safeT) - 64px);display:flex;flex-direction:column;
+  border-radius:28px 28px 0 0;
+  background:linear-gradient(180deg,rgba(22,26,42,.82),rgba(8,10,19,.92));
   -webkit-backdrop-filter:blur(26px) saturate(150%);backdrop-filter:blur(26px) saturate(150%);
-  border:1px solid rgba(255,255,255,.1);
-  box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08);
-  transform:translateY(calc(100% + 40px));transition:transform 1.1s var(--ease)}
-.card.show{transform:none}
-.card .grab{width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.2);margin:-8px auto 12px}
-.inner{transition:opacity .35s ease,transform .5s var(--ease)}
-.inner.swap{opacity:0;transform:translateY(8px)}
-.eyebrow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;letter-spacing:2.6px;
+  border:1px solid rgba(255,255,255,.1);border-bottom:0;
+  box-shadow:0 -20px 60px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08);
+  transform:translate3d(0,110%,0);transition:transform .62s var(--spring);will-change:transform}
+.sheet.drag{transition:none}
+.handle{flex:none;padding:9px 0 5px;touch-action:none;cursor:grab}
+.handle i{display:block;width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.25);margin:0 auto}
+.bar{flex:none;display:flex;align-items:center;gap:12px;padding:4px 18px 14px;touch-action:none;cursor:pointer;min-height:66px}
+.bt{flex:1;min-width:0}
+.be{font-size:11px;letter-spacing:2.2px;font-weight:800;color:var(--gold);text-transform:uppercase}
+.bm{font-size:18px;font-weight:800;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px}
+.bs{font-size:14px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.nowchip{flex:none;display:flex;align-items:center;gap:8px;padding:9px 13px;border-radius:999px;font-size:14px;font-weight:800;
+  background:rgba(111,240,214,.1);border:1px solid rgba(111,240,214,.32);color:#c9fff3;white-space:nowrap;transition:transform .2s var(--ease)}
+.nowchip:active{transform:scale(.95)}
+.nowchip i{width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal);animation:breathe 2.4s ease-in-out infinite}
+.nowchip.off{background:rgba(255,255,255,.05);border-color:var(--line);color:var(--muted)}
+.nowchip.off i{background:var(--faint);box-shadow:none;animation:none}
+@keyframes breathe{50%{opacity:.35}}
+.detail{flex:none;padding:2px 22px 18px;transition:opacity .35s ease}
+.sheet.full .detail{display:none}
+.lists{flex:1;min-height:0;display:none;flex-direction:column}
+.sheet.full .lists{display:flex;animation:fadeUp .5s var(--ease)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.swap{opacity:0}
+.eyebrow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;letter-spacing:2.4px;
   font-weight:800;color:var(--gold);text-transform:uppercase}
 .chip{font-size:13px;letter-spacing:.2px;text-transform:none;font-weight:700;padding:5px 11px;border-radius:999px;
   background:rgba(242,184,75,.13);color:var(--gold2);border:1px solid rgba(242,184,75,.3);white-space:nowrap}
-.name{font-size:23px;font-weight:800;margin-top:10px;letter-spacing:-.2px;line-height:1.2}
+.chip.faint{background:rgba(200,215,255,.08);color:#d9e2ff;border-color:rgba(200,215,255,.22)}
+.chip.vfaint{background:transparent;color:var(--muted);border-color:rgba(255,255,255,.16)}
+.name{font-size:23px;font-weight:800;margin-top:8px;letter-spacing:-.2px;line-height:1.2}
 .timerow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:4px}
-.time{font-family:'Instrument Serif',serif;font-size:72px;line-height:.95;letter-spacing:-1.5px;font-variant-numeric:lining-nums}
-.time small{font-family:Manrope,sans-serif;font-size:19px;font-weight:700;color:var(--muted);margin-left:8px;letter-spacing:0}
+.time{font-family:'Instrument Serif',serif;font-size:66px;line-height:.95;letter-spacing:-1.5px}
+.time small{font-family:Manrope,sans-serif;font-size:18px;font-weight:700;color:var(--muted);margin-left:8px;letter-spacing:0}
 .when{text-align:right;padding-bottom:8px}
 .when .d{font-size:15px;color:var(--muted);font-weight:600}
 .when .c{font-size:18px;font-weight:800;margin-top:3px}
-.when .c.now{color:var(--gold2);display:inline-flex;align-items:center;gap:8px}
-.when .c.now::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 0 rgba(242,184,75,.7);animation:ping 1.6s infinite}
+.c.now{color:var(--gold2);display:inline-flex;align-items:center;gap:8px}
+.c.now::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--gold);animation:ping 1.6s infinite}
 @keyframes ping{0%{box-shadow:0 0 0 0 rgba(242,184,75,.7)}80%,100%{box-shadow:0 0 0 12px rgba(242,184,75,0)}}
-.look{display:flex;align-items:center;gap:14px;margin-top:16px;font-size:18px;font-weight:700;line-height:1.3}
-.compass{width:46px;height:46px;flex:none;border-radius:50%;border:1px solid rgba(255,255,255,.14);position:relative;
+.look{display:flex;align-items:center;gap:14px;margin-top:14px;font-size:18px;font-weight:700;line-height:1.3}
+.compass{width:44px;height:44px;flex:none;border-radius:50%;border:1px solid rgba(255,255,255,.14);position:relative;
   background:radial-gradient(circle,rgba(255,255,255,.06),rgba(255,255,255,.01))}
 .compass b{position:absolute;top:3px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:800;color:var(--faint);letter-spacing:.5px}
 .compass svg{position:absolute;inset:0;transition:transform 1.2s var(--ease)}
 .path{font-size:16px;color:var(--muted);margin-top:10px;line-height:1.5}
-.actions{display:flex;gap:10px;margin-top:18px}
-.btn{flex:1;height:54px;border-radius:18px;background:rgba(255,255,255,.07);border:1px solid var(--line);
-  font-size:16px;font-weight:800;letter-spacing:.1px;transition:transform .2s var(--ease),background .3s}
+.actions{display:flex;gap:10px;margin-top:16px}
+.btn{flex:1;height:52px;border-radius:17px;background:rgba(255,255,255,.07);border:1px solid var(--line);
+  font-size:16px;font-weight:800;text-align:center;transition:transform .2s var(--ease)}
 .btn:active{transform:scale(.97)}
-.btn.gold{background:linear-gradient(180deg,#f7c865,#e2a138);color:#1d1406;border:none;box-shadow:0 10px 30px rgba(226,161,56,.25)}
+.btn.gold{background:linear-gradient(180deg,#f7c865,#e2a138);color:#1d1406;border:none;box-shadow:0 10px 30px rgba(226,161,56,.22)}
 .btn.slim{flex:0 0 auto;padding:0 20px}
-.empty{font-size:16px;color:var(--muted);margin-top:10px;line-height:1.5}
+.empty{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
 .skel{height:14px;border-radius:7px;margin-top:12px;background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(255,255,255,.12),rgba(255,255,255,.05));
   background-size:200% 100%;animation:sh 1.6s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
 
-/* sheet */
-.scrim{position:fixed;inset:0;z-index:7;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .6s ease}
-.scrim.show{opacity:1;pointer-events:auto}
-.sheet{position:fixed;z-index:8;left:0;right:0;bottom:0;margin:0 auto;max-width:620px;max-height:80vh;
-  border-radius:32px 32px 0 0;background:rgba(10,13,22,.9);
-  -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
-  border:1px solid var(--line);border-bottom:0;padding:10px 12px calc(var(--safeB) + 14px);
-  display:flex;flex-direction:column;transform:translateY(105%);transition:transform .75s var(--ease)}
-.sheet.show{transform:none}
-.sheet .grab{width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,.25);margin:4px auto 16px;flex:none}
-.sheet header{padding:0 10px 10px;display:flex;justify-content:space-between;align-items:flex-end}
-.sheet h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:42px;line-height:1}
-.sheet header p{color:var(--muted);font-size:15px;margin-top:6px}
-.sheet .x{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);display:grid;place-items:center;flex:none}
-.list{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:6px}
-.row{display:grid;grid-template-columns:108px 1fr auto;gap:12px;align-items:center;padding:16px 10px;border-top:1px solid var(--line);
+.tabs{flex:none;display:flex;gap:6px;margin:2px 16px 8px;padding:4px;border-radius:16px;background:rgba(255,255,255,.06);touch-action:none}
+.tabs button{flex:1;height:42px;border-radius:12px;font-size:15px;font-weight:800;color:var(--muted);text-align:center;transition:background .35s var(--ease),color .35s}
+.tabs button.on{background:rgba(255,255,255,.12);color:var(--ink)}
+.tabs b{color:var(--teal);margin-left:4px}
+.scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 12px calc(var(--safeB) + 16px)}
+.head{padding:8px 10px 14px}
+.head .big{font-family:'Instrument Serif',serif;font-size:60px;line-height:.95}
+.head .big.teal{color:#c9fff3}
+.head .lead{font-size:18px;font-weight:700;line-height:1.4;margin-top:2px}
+.head .lead em{font-style:normal;color:var(--gold2)}
+.head .note{font-size:15px;color:var(--muted);margin-top:8px;line-height:1.45}
+.head .mix{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.row{display:grid;grid-template-columns:104px 1fr auto;gap:12px;align-items:center;padding:15px 10px;border-top:1px solid var(--line);
   border-radius:16px;transition:background .25s;width:100%;text-align:left}
+.row.now{grid-template-columns:14px 1fr auto}
 .row:active{background:rgba(255,255,255,.06)}
-.row .t{font-family:'Instrument Serif',serif;font-size:34px;line-height:.9}
+.row .t{font-family:'Instrument Serif',serif;font-size:32px;line-height:.9}
 .row .t small{display:block;white-space:nowrap;font-family:Manrope,sans-serif;font-size:12px;color:var(--faint);font-weight:700;margin-top:6px;letter-spacing:.3px}
 .row .n{font-weight:800;font-size:17px;line-height:1.25}
-.row .l{font-size:15px;color:var(--muted);margin-top:4px;line-height:1.35}
+.row .l{font-size:15px;color:var(--muted);margin-top:3px;line-height:1.35}
 .row .chip{font-size:12px;padding:4px 9px}
 .row.live .t{color:var(--gold2)}
-.none{color:var(--muted);padding:20px 10px;font-size:16px;line-height:1.5}
+.row .dot{width:10px;height:10px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal)}
+.row .dot.dim{opacity:.5;box-shadow:none}
+.none{color:var(--muted);padding:18px 10px;font-size:16px;line-height:1.5}
 
 /* labels */
 .lbl{position:fixed;left:0;top:0;z-index:3;pointer-events:none;font-size:13px;font-weight:800;letter-spacing:.5px;color:var(--gold2);
@@ -136,7 +156,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 /* loader */
 #loader{position:fixed;inset:0;z-index:30;display:grid;place-items:center;
   background:radial-gradient(ellipse at 50% 55%,#0d1630 0%,#03050b 65%);transition:opacity 1.4s ease,visibility 1.4s}
-#loader.hide{opacity:0;visibility:hidden}
+#loader.hide{opacity:0;visibility:hidden;pointer-events:none}
 .ld{text-align:center}
 .ld h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:64px;line-height:1}
 .ld h1 em{color:var(--gold)}
@@ -150,40 +170,37 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 @media (min-width:900px){
-  .card{left:28px;right:auto;margin:0;width:440px;bottom:calc(var(--safeB) + 28px)}
-  .top{left:28px;right:28px;top:calc(var(--safeT) + 26px)}
-  .brand h1{font-size:46px}
-}
-@media (max-height:560px) and (orientation:landscape){
-  .card{left:16px;right:auto;width:380px;margin:0;padding:14px 18px}
-  .time{font-size:52px}
-  .actions{margin-top:12px}
-  .path{display:none}
+  .sheet{left:24px;right:auto;margin:0;width:430px;height:calc(100% - var(--safeT) - 84px)}
+  .top{left:28px;right:28px;top:calc(var(--safeT) + 22px)}
+  .brand h1{font-size:34px}
 }
 </style>
 </head>
 <body>
 <div id="stage"></div>
 <div class="shadeTop"></div>
-<div class="shade"></div>
+<div id="probe"></div>
 
 <div class="top">
-  <div class="brand"><h1>Over<em>head</em></h1><p>What's flying over you</p></div>
-  <button class="pill" id="slBtn" aria-pressed="false"><span>Show all Starlink</span><span class="sw"></span></button>
+  <div class="brand"><h1>Over<em>head</em></h1></div>
+  <button class="pill" id="slBtn" aria-pressed="false"><span>Starlink</span><span class="sw"></span></button>
 </div>
 
 <div class="lbl" id="lblIss">Space Station</div>
 <div class="lbl" id="lblSel"></div>
 <div class="lbl you" id="lblYou">You</div>
 
-<section class="card" id="card"><div class="grab"></div><div class="inner" id="cardInner"></div></section>
-
-<div class="scrim" id="scrim"></div>
-<section class="sheet" id="sheet" aria-label="Coming up">
-  <div class="grab"></div>
-  <header><div><h2>Coming up</h2><p>What you can see from where you are</p></div>
-    <button class="x" id="sheetX" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></button></header>
-  <div class="list" id="list"></div>
+<section class="sheet" id="sheet" aria-label="Overhead">
+  <div class="handle" id="handle"><i></i></div>
+  <div class="bar" id="bar">
+    <div class="bt"><div class="be" id="barEye">Next over you</div><div class="bm" id="barMain">Finding where you are</div><div class="bs" id="barSub">&nbsp;</div></div>
+    <button class="nowchip off" id="nowChip"><i></i><span id="nowChipTxt">Right now</span></button>
+  </div>
+  <div class="detail" id="detail"></div>
+  <div class="lists" id="lists">
+    <div class="tabs" id="tabs"><button data-tab="tonight" class="on">Tonight</button><button data-tab="now">Right now<b id="tabN"></b></button></div>
+    <div class="scroll" id="scroll"></div>
+  </div>
 </section>
 
 <div id="loader"><div class="ld"><div class="orbit"><i></i></div><h1>Over<em>head</em></h1><p id="ldMsg">Finding what's above you</p></div></div>
@@ -193,6 +210,7 @@ importScripts('https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.mi
 const S = self.satellite;
 const RE = 6371, D2R = Math.PI/180, R2D = 180/Math.PI, DARK = Math.sin(-6*D2R);
 let main = [], sl = [], trains = [], obs = null, slOn = false, paused = false, passTimer = null;
+let OFF = 0; const nowMs = () => Date.now() + OFF;
 
 function parse(txt){
   const L = (txt||'').split(/\r?\n/), out = [];
@@ -236,14 +254,14 @@ function sample(rec, t){
   const d = new Date(t), pv = S.propagate(rec, d);
   if (!pv || !pv.position) return null;
   const g = S.gstime(d), ecf = S.eciToEcf(pv.position, g), la = S.ecfToLookAngles(obs.gd, ecf);
-  return { t, el: la.elevation*R2D, az: ((la.azimuth*R2D)%360+360)%360, p: pv.position, g };
+  return { t, el: la.elevation*R2D, az: ((la.azimuth*R2D)%360+360)%360, p: pv.position, g, rng: la.rangeSat };
 }
 function findPasses(rec, t0, t1, minPeak){
   const res = [];
   let t = t0;
   while (t < t1){
     const s = sample(rec, t);
-    if (!s || s.el < 10){ t += 60000; continue; }
+    if (!s || s.el < 10){ t += (s ? skipMin(rec, s.p, s.g, 10) : 1)*60000; continue; }
     const pts = [];
     for (let u = t - 60000; u < t + 40*60000; u += 10000){
       const q = sample(rec, u);
@@ -256,14 +274,14 @@ function findPasses(rec, t0, t1, minPeak){
     if (v.length){
       let pk = v[0]; for (const q of v) if (q.el > pk.el) pk = q;
       if (pk.el >= minPeak) res.push({ start: v[0].t, end: v[v.length-1].t, startAz: v[0].az, endAz: v[v.length-1].az,
-        peakT: pk.t, peakEl: pk.el, peakAz: pk.az });
+        peakT: pk.t, peakEl: pk.el, peakAz: pk.az, peakRng: pk.rng });
     }
     t = pts[pts.length-1].t + 60000;
   }
   return res;
 }
 function findTrains(list){
-  const yy = String(new Date().getUTCFullYear() % 100).padStart(2,'0'), groups = {};
+  const yy = String(new Date(nowMs()).getUTCFullYear() % 100).padStart(2,'0'), groups = {};
   for (const s of list){ const k = s.l1.substring(9,14); if (k.startsWith(yy)) (groups[k] = groups[k] || []).push(s); }
   const out = [];
   for (const k in groups){
@@ -288,9 +306,58 @@ function positions(list, t){
   }
   return arr;
 }
+function apoOf(rec){ const a = Math.cbrt(398600.4418/Math.pow(rec.no/60, 2)); return a*(1 + rec.ecco) - RE; }
+function coneOf(rec, minEl){
+  if (rec._cone == null || rec._coneEl !== minEl){
+    const h = Math.max(150, apoOf(rec)), e = minEl*D2R;
+    rec._cone = (Math.acos(Math.min(1, RE/(RE + h)*Math.cos(e))) - e)*R2D + 2; rec._coneEl = minEl;
+    rec._rate = rec.no*R2D + 0.3;
+  }
+  return rec._cone;
+}
+// minutes we can safely jump ahead: the satellite is far outside the circle where it could be above minEl
+function skipMin(rec, p, g, minEl){
+  if (!p) return 1;
+  const c = Math.cos(g), sn = Math.sin(g);
+  const ux = obs.up[0]*c - obs.up[1]*sn, uy = obs.up[0]*sn + obs.up[1]*c, uz = obs.up[2];
+  const ang = Math.acos(Math.max(-1, Math.min(1, (p.x*ux + p.y*uy + p.z*uz)/Math.hypot(p.x, p.y, p.z))))*R2D;
+  const cone = coneOf(rec, minEl);
+  return ang > cone ? Math.max(1, Math.floor((ang - cone)/rec._rate)) : 1;
+}
+// honest brightness: what a person can really spot
+// sunlight reflected toward you: 1 when the sun is behind you, 0 when the satellite is backlit
+function phaseF(p, sd, g){
+  const c = Math.cos(g), sn = Math.sin(g);
+  const vx = (obs.up[0]*c - obs.up[1]*sn)*RE - p.x, vy = (obs.up[0]*sn + obs.up[1]*c)*RE - p.y, vz = obs.up[2]*RE - p.z;
+  const phi = Math.acos(Math.max(-1, Math.min(1, (vx*sd[0] + vy*sd[1] + vz*sd[2])/Math.hypot(vx, vy, vz))));
+  return ((Math.PI - phi)*Math.cos(phi) + Math.sin(phi))/Math.PI;
+}
+// Starlink brightness at 1000 km, half lit: first batches were brighter, later ones carry visors / dark film
+const starStd = s => (s.year || 2025) <= 2020 ? 5.3 : (s.year <= 2022 ? 5.9 : 6.4);
+const NAKED = 4.0; // what a dark-adapted eye can pick out from a back yard
+function grade(s, el, rng, p, sd, g){
+  if (s.kind === 'iss') return 'Very bright';
+  if (s.kind === 'train' || s.kind === 'star'){
+    if (rng > 1000) return null;
+    const F = phaseF(p, sd, g); if (F <= 0.002) return null;
+    return starStd(s) + 5*Math.log10(rng/1000) - 2.5*Math.log10(F/0.3183) <= NAKED ? 'Faint' : null;
+  }
+  if (s.kind === 'rb') return rng < 1200 ? 'Bright' : 'Faint';
+  if (s.kind === 'act'){
+    // most other payloads are small; count one only when it is close, high and lit from behind you
+    if (rng > 900 || el < 30) return null;
+    const F = phaseF(p, sd, g); if (F <= 0.002) return null;
+    return 6.0 + 5*Math.log10(rng/1000) - 2.5*Math.log10(F/0.3183) <= NAKED ? 'Very faint' : null;
+  }
+  return 'Bright';
+}
+function nextDark(t){
+  for (let u = t; u < t + 26*3600000; u += 120000) if (obsSunSin(sunDir(u), S.gstime(new Date(u))) < DARK) return u;
+  return null;
+}
 function computePasses(){
   if (!obs) return;
-  const now = Date.now(), t0 = now - 20*60000, t1 = now + 24*3600000, out = [];
+  const now = nowMs(), t0 = now - 20*60000, t1 = now + 24*3600000, out = [];
   main.forEach((s, i) => {
     if (s.kind === 'train') return;
     const minPeak = (s.kind === 'iss' || s.kind === 'css') ? 10 : 25;
@@ -302,29 +369,130 @@ function computePasses(){
   out.sort((a,b) => a.start - b.start);
   postMessage({ type: 'passes', passes: out.filter(p => p.end > now), at: now });
 }
+
+/* ---- right now: everything sunlit, above 15 degrees, under a dark sky ---- */
+let nowAct = [], listAct = [], selAct = -1;
+function look(rec, t){
+  const d = new Date(t), pv = S.propagate(rec, d);
+  if (!pv || !pv.position) return null;
+  const g = S.gstime(d), la = S.ecfToLookAngles(obs.gd, S.eciToEcf(pv.position, g));
+  return { la, p: pv.position, g };
+}
+function heading(rec, t, la){
+  const b = look(rec, t + 5000); if (!b) return 0;
+  const en = a => { const ce = Math.cos(a.elevation); return [a.rangeSat*ce*Math.sin(a.azimuth), a.rangeSat*ce*Math.cos(a.azimuth)]; };
+  const p1 = en(la), p2 = en(b.la);
+  return ((Math.atan2(p2[0] - p1[0], p2[1] - p1[1])*R2D) + 360) % 360;
+}
+const RANK = { 'Very bright': 0, 'Bright': 1, 'Faint': 2, 'Very faint': 3 };
+function nowCheck(){
+  if (!obs || paused) return;
+  const t = nowMs(), d = new Date(t), g = S.gstime(d), sd = sunDir(t);
+  if (obsSunSin(sd, g) >= DARK){ nowAct = []; postMessage({ type: 'now', dark: false, darkAt: nextDark(t), list: [] }); return; }
+  const c = Math.cos(g), sn = Math.sin(g);
+  const ux = obs.up[0]*c - obs.up[1]*sn, uy = obs.up[0]*sn + obs.up[1]*c, uz = obs.up[2];
+  const out = [];
+  const check = (s, t_, i) => {
+    const pv = S.propagate(s.rec, d); if (!pv || !pv.position) return;
+    const p = pv.position, r = Math.hypot(p.x, p.y, p.z);
+    if (Math.acos(Math.max(-1, Math.min(1, (p.x*ux + p.y*uy + p.z*uz)/r)))*R2D > coneOf(s.rec, 15)) return;
+    const la = S.ecfToLookAngles(obs.gd, S.eciToEcf(p, g)), el = la.elevation*R2D;
+    if (el < 15 || !lit(p, sd)) return;
+    const lbl = grade(s, el, la.rangeSat, p, sd, g); if (!lbl) return;
+    out.push({ t: t_, i, name: s.name, kind: s.kind, year: s.year, train: s.train ?? -1, el, az: ((la.azimuth*R2D) + 360) % 360,
+      rng: la.rangeSat, lbl, hd: heading(s.rec, t, la) });
+  };
+  main.forEach((s, i) => check(s, 'm', i));
+  cand.forEach(i => check(act[i], 'a', i));
+  out.sort((a,b) => (RANK[a.lbl] - RANK[b.lbl]) || (b.el - a.el));
+  nowAct = out.filter(o => o.t === 'a').map(o => o.i);
+  postMessage({ type: 'now', dark: true, list: out, at: t });
+}
+
+/* ---- tonight: distinct sunlit passes over 20 degrees, dark sky until 10 PM ---- */
+function evening(){
+  if (!obs) return;
+  postMessage({ type: 'counting' });
+  const t = nowMs(), ten = new Date(t); ten.setHours(22, 0, 0, 0);
+  if (t > ten.getTime()) ten.setDate(ten.getDate() + 1);
+  const from = new Date(ten); from.setHours(14, 0, 0, 0);
+  let dark = null;
+  for (let u = from.getTime(); u < ten.getTime(); u += 60000) if (obsSunSin(sunDir(u), S.gstime(new Date(u))) < DARK){ dark = u; break; }
+  if (!dark){ postMessage({ type: 'evening', count: 0, dark: null, start: null, end: ten.getTime(), faint: [] }); return; }
+  const w0 = Math.max(dark, t), w1 = ten.getTime();
+  let count = 0; const faint = [];
+  const ok = (s, u) => {
+    const q = look(s.rec, u); if (!q) return null;
+    const el = q.la.elevation*R2D; if (el < 20) return null;
+    const sd = sunDir(u); if (!lit(q.p, sd) || obsSunSin(sd, q.g) >= DARK) return null;
+    const lbl = grade(s, el, q.la.rangeSat, q.p, sd, q.g); if (!lbl) return null;
+    return { u, el, az: ((q.la.azimuth*R2D) + 360) % 360, lbl };
+  };
+  const scan = (s, t_, i) => {
+    let u = w0;
+    while (u <= w1){
+      const d = new Date(u), pv = S.propagate(s.rec, d);
+      if (!pv || !pv.position) return;
+      const g = S.gstime(d), k = skipMin(s.rec, pv.position, g, 20);
+      if (k > 1){ u += k*60000; continue; }
+      const hit = ok(s, u);
+      if (!hit){ u += 60000; continue; }
+      count++;
+      if (t_ === 'a'){
+        const pts = [];
+        for (let v = u - 4*60000; v <= u + 8*60000; v += 15000){ const h = ok(s, v); if (h) pts.push(h); }
+        if (pts.length){
+          let pk = pts[0]; for (const h of pts) if (h.el > pk.el) pk = h;
+          faint.push({ ref: 'a', ai: i, name: s.name, kind: s.kind, year: s.year, start: pts[0].u, end: pts[pts.length-1].u,
+            startAz: pts[0].az, endAz: pts[pts.length-1].az, peakT: pk.u, peakEl: pk.el, peakAz: pk.az, lbl: pk.lbl });
+        }
+      }
+      u += 12*60000;
+    }
+  };
+  main.forEach((s, i) => scan(s, 'm', i));
+  cand.forEach(i => scan(act[i], 'a', i));
+  faint.sort((a,b) => (b.peakEl + (b.end - b.start)/30000) - (a.peakEl + (a.end - a.start)/30000));
+  const pick = [];
+  for (const f of faint){ if (pick.length >= 6) break; if (pick.every(p => Math.abs(p.start - f.start) > 4*60000)) pick.push(f); }
+  listAct = pick.map(p => p.ai);
+  postMessage({ type: 'evening', count, dark, start: w0, end: w1, faint: pick });
+}
+
 function tickMain(){
-  if (!paused && main.length){ const a = positions(main, Date.now() + 500); postMessage({ type: 'pos', main: a }, [a.buffer]); }
+  if (paused || !main.length) return;
+  const t = nowMs() + 500, a = positions(main, t);
+  const ids = [...new Set(nowAct.concat(listAct, selAct >= 0 ? [selAct] : []))];
+  const tr = new Int32Array(ids), tp = positions(ids.map(i => act[i]), t);
+  postMessage({ type: 'pos', main: a, trk: tr, trkPos: tp }, [a.buffer, tr.buffer, tp.buffer]);
 }
 function tickSl(){
-  if (!paused && slOn && sl.length){ const a = positions(sl, Date.now() + 1000); postMessage({ type: 'pos', sl: a }, [a.buffer]); }
+  if (!paused && slOn && sl.length){ const a = positions(sl, nowMs() + 1000); postMessage({ type: 'pos', sl: a }, [a.buffer]); }
 }
+let act = [], cand = [], nowTimer = null;
 onmessage = e => {
   const m = e.data;
   if (m.type === 'init'){
+    OFF = m.off || 0;
     const seen = new Set();
     for (const s of parse(m.visual).concat(parse(m.stations).filter(s => s.id === '25544' || /TIANHE/.test(s.name)))){
       if (seen.has(s.id)) continue; seen.add(s.id);
       s.kind = kindOf(s); s.year = yearOf(s.l1); main.push(s);
     }
-    sl = parse(m.starlink);
+    const all = parse(m.active).filter(s => !seen.has(s.id) && (seen.add(s.id), true));
+    all.forEach(s => { s.kind = /^STARLINK/.test(s.name) ? 'star' : 'act'; s.year = yearOf(s.l1); });
+    sl = all.filter(s => s.kind === 'star');
     trains = findTrains(sl).map((tr, ti) => {
       const base = main.length;
-      tr.members.forEach(s => { s.kind = 'train'; s.train = ti; s.year = yearOf(s.l1); main.push(s); });
+      tr.members.forEach(s => { s.kind = 'train'; s.train = ti; main.push(s); });
       const mid = tr.members.length >> 1;
       return { ti, rep: tr.members[mid], repIdx: base + mid, size: tr.members.length };
     });
+    act = all.filter(s => s.kind !== 'train');
+    cand = []; act.forEach((s, i) => { if (apoOf(s.rec) < 1000) cand.push(i); });
     postMessage({ type: 'ready', sats: main.map(s => ({ id: s.id, name: s.name, kind: s.kind, year: s.year, train: s.train ?? -1 })),
-      slCount: sl.length, trains: trains.map(t => ({ ti: t.ti, repIdx: t.repIdx, size: t.size })) });
+      slCount: sl.length, actCount: act.length, candCount: cand.length,
+      trains: trains.map(t => ({ ti: t.ti, repIdx: t.repIdx, size: t.size })) });
     tickMain();
     setInterval(tickMain, 500);
     setInterval(tickSl, 1000);
@@ -332,20 +500,28 @@ onmessage = e => {
     const lat = m.lat*D2R, lon = m.lon*D2R;
     obs = { gd: { latitude: lat, longitude: lon, height: (m.alt || 0)/1000 },
       up: [Math.cos(lat)*Math.cos(lon), Math.cos(lat)*Math.sin(lon), Math.sin(lat)] };
+    const t0 = performance.now();
+    nowCheck();
     computePasses();
-    clearInterval(passTimer); passTimer = setInterval(computePasses, 15*60000);
+    const t1 = performance.now();
+    evening();
+    postMessage({ type: 'timing', now_passes: Math.round(t1 - t0), evening: Math.round(performance.now() - t1) });
+    clearInterval(passTimer); passTimer = setInterval(() => { computePasses(); evening(); }, 15*60000);
+    clearInterval(nowTimer); nowTimer = setInterval(nowCheck, 3000);
   } else if (m.type === 'sl'){
     slOn = m.on; tickSl();
+  } else if (m.type === 'track'){
+    selAct = m.i;
   } else if (m.type === 'path'){
-    const s = main[m.idx]; if (!s) return;
-    const n = 191, arr = new Float32Array(n*3), now = Date.now();
+    const s = m.t === 'a' ? act[m.idx] : main[m.idx]; if (!s) return;
+    const n = 191, arr = new Float32Array(n*3), now = nowMs();
     for (let i = 0; i < n; i++){
       const d = new Date(now + i*30000), pv = S.propagate(s.rec, d);
       if (pv && pv.position) toThree(pv.position, S.gstime(d), arr, i*3);
     }
-    postMessage({ type: 'path', idx: m.idx, pts: arr }, [arr.buffer]);
+    postMessage({ type: 'path', t: m.t || 'm', idx: m.idx, pts: arr }, [arr.buffer]);
   } else if (m.type === 'pause'){
-    paused = m.on; if (!paused){ tickMain(); tickSl(); }
+    paused = m.on; if (!paused){ tickMain(); tickSl(); nowCheck(); }
   }
 };
 </script>
@@ -362,24 +538,29 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const $ = s => document.querySelector(s);
 const D2R = Math.PI/180;
-const TEX = 'https://unpkg.com/three-globe@2.31.0/example/img/';
-const state = { sats: [], passes: [], obs: null, sel: null, slOn: false, slCount: 0, trains: [], locError: null, dataError: false, worker: null, ready: false };
+// ?t=2026-10-07T19:30:00-05:00 shifts the clock (for previews); normal visitors get real time
+const OFF = (() => { try { const q = new URLSearchParams(location.search).get('t'); const v = q ? Date.parse(q) : NaN; return isNaN(v) ? 0 : v - Date.now(); } catch (e) { return 0; } })();
+const nowMs = () => Date.now() + OFF;
+const state = { sats: [], passes: [], obs: null, sel: null, slOn: false, slCount: 0, trains: [], locError: null, dataError: false,
+  worker: null, now: null, evening: null, counting: false };
 
 /* ---------- renderer / scene ---------- */
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); }
 catch (e) { $('#ldMsg').textContent = 'This device could not start the 3D globe.'; throw e; }
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 3));
 renderer.setClearColor(0x03050b, 1);
 $('#stage').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 300);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.005, 300);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.06;
-controls.enablePan = false; controls.zoomSpeed = 0.8; controls.minDistance = 1.22;
+controls.enablePan = false; controls.zoomSpeed = 0.9; controls.minDistance = 1.08;
 controls.rotateSpeed = 0.4; controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+const MAXTEX = renderer.capabilities.maxTextureSize, ANISO = renderer.capabilities.getMaxAnisotropy();
 let baseDist = 3.4;
-const flyDist = () => baseDist*(window.innerWidth >= 900 ? 0.92 : 0.72);
+const sprMat = [];
+const flyDist = () => baseDist*(window.innerWidth >= 900 ? 0.9 : 0.68);
 
 function layout(){
   const w = window.innerWidth, h = window.innerHeight;
@@ -387,13 +568,13 @@ function layout(){
   camera.aspect = w/h;
   const half = Math.atan(Math.tan(camera.fov*D2R/2) * Math.min(1, w/h));
   baseDist = 1.06/Math.sin(half);
-  controls.maxDistance = baseDist*1.35;
-  const shift = w < 900 ? h*0.12 : 0;
-  camera.setViewOffset(w, h, 0, shift, w, h);
+  controls.maxDistance = baseDist*1.4;
+  camera.setViewOffset(w, h, 0, w < 900 ? 40 : 0, w, h);
   camera.updateProjectionMatrix();
-  sprMat.forEach(m => m.uniforms && (m.uniforms.pr.value = renderer.getPixelRatio()));
+  const pr = renderer.getPixelRatio();
+  sprMat.forEach(m => m.uniforms.pr.value = pr);
+  sheetLayout();
 }
-const sprMat = [];
 
 function ll2v(lat, lon, r = 1){
   const a = lat*D2R, b = lon*D2R;
@@ -401,7 +582,7 @@ function ll2v(lat, lon, r = 1){
 }
 function gmst(t){
   const jd = t/86400000 + 2440587.5, T = (jd - 2451545)/36525;
-  let g = 280.46061837 + 360.98564736629*(jd - 2451545) + 0.000387933*T*T;
+  const g = 280.46061837 + 360.98564736629*(jd - 2451545) + 0.000387933*T*T;
   return ((g % 360) + 360) % 360 * D2R;
 }
 function sunVec(t){
@@ -410,49 +591,133 @@ function sunVec(t){
   const lam = L + (1.915*Math.sin(g) + 0.020*Math.sin(2*g))*D2R, eps = (23.439 - 4e-7*n)*D2R;
   const x = Math.cos(lam), y = Math.cos(eps)*Math.sin(lam), z = Math.sin(eps)*Math.sin(lam);
   const G = gmst(t), c = Math.cos(G), s = Math.sin(G);
-  const X = x*c + y*s, Y = -x*s + y*c;
-  return new THREE.Vector3(X, z, -Y).normalize();
+  return new THREE.Vector3(x*c + y*s, z, -(-x*s + y*c)).normalize();
 }
 
-/* ---------- Earth ---------- */
-const manager = new THREE.LoadingManager();
-const loader = new THREE.TextureLoader(manager);
-loader.setCrossOrigin('anonymous');
-const aniso = renderer.capabilities.getMaxAnisotropy();
-function tex(n){ const t = loader.load(TEX + n); t.anisotropy = Math.min(8, aniso); return t; }
-const sun = { value: sunVec(Date.now()) };
-const earthMat = new THREE.ShaderMaterial({
-  uniforms: { dayMap: { value: tex('earth-blue-marble.jpg') }, nightMap: { value: tex('earth-night.jpg') },
-    specMap: { value: tex('earth-water.png') }, sunDir: sun },
-  vertexShader: `
-    varying vec2 vUv; varying vec3 vN; varying vec3 vW;
-    void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position,1.); vW = w.xyz;
-      gl_Position = projectionMatrix * viewMatrix * w; }`,
-  fragmentShader: `
-    uniform sampler2D dayMap, nightMap, specMap; uniform vec3 sunDir;
-    varying vec2 vUv; varying vec3 vN; varying vec3 vW;
-    void main(){
-      vec3 n = normalize(vN); vec3 v = normalize(cameraPosition - vW);
-      float d = dot(n, sunDir);
-      float day = smoothstep(-0.10, 0.22, d);
-      vec3 dayC = texture2D(dayMap, vUv).rgb;
-      dayC = pow(dayC, vec3(1.08)) * (0.18 + 1.05*clamp(d + 0.15, 0., 1.));
-      vec3 city = texture2D(nightMap, vUv).rgb;
-      float lum = dot(city, vec3(.299,.587,.114));
-      vec3 nightC = vec3(1.0,0.72,0.36) * pow(lum, 1.6) * 2.4 + texture2D(dayMap, vUv).rgb * vec3(0.05,0.06,0.09) + vec3(0.006,0.010,0.022);
-      vec3 col = mix(nightC, dayC, day);
+/* ---------- Earth: quick low-res first, then 4K, then sharp NASA tiles when zoomed in ---------- */
+const TG = 'https://unpkg.com/three-globe@2.31.0/example/img/';
+const TEX = {
+  dayLo: TG + 'earth-day.jpg',
+  nightLo: 'https://cdn.jsdelivr.net/npm/earth-visualization@1.0.1/dist/textures/earth_nightlights_2048x1024.jpg',
+  dayHi: TG + 'earth-blue-marble.jpg', nightHi: TG + 'earth-night.jpg', water: TG + 'earth-water.png'
+};
+const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
+function prep(t){ t.anisotropy = ANISO; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.generateMipmaps = true; return t; }
+const loadTex = url => new Promise(res => loader.load(url, t => res(prep(t)), undefined, () => res(null)));
+const sun = { value: sunVec(nowMs()) };
+const blank = new THREE.DataTexture(new Uint8Array([0,0,0,255]), 1, 1); blank.needsUpdate = true;
+const EARTH_FRAG = `
+  uniform sampler2D dayMap, nightMap, specMap; uniform vec3 sunDir; uniform float useSpec, opacity, edge, nightK, nightP;
+  varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+  void main(){
+    vec3 n = normalize(vN); vec3 v = normalize(cameraPosition - vW);
+    float d = dot(n, sunDir);
+    float day = smoothstep(-0.10, 0.22, d);
+    vec4 dayT = texture2D(dayMap, vUv);
+    vec3 dayC = pow(dayT.rgb, vec3(1.08)) * (0.18 + 1.05*clamp(d + 0.15, 0., 1.));
+    vec3 city = texture2D(nightMap, vUv).rgb;
+    float lum = dot(city, vec3(.299,.587,.114));
+    vec3 nightC = vec3(1.0,0.72,0.36) * pow(lum, nightP) * nightK + dayT.rgb * vec3(0.05,0.06,0.09) + vec3(0.006,0.010,0.022);
+    vec3 col = mix(nightC, dayC, day);
+    if (useSpec > 0.5){
       float water = texture2D(specMap, vUv).r;
       vec3 h = normalize(sunDir + v);
       col += vec3(1.0,0.92,0.78) * pow(max(dot(n,h),0.), 140.) * water * day * 0.18;
-      float fres = pow(1. - max(dot(n, v), 0.), 2.6);
-      col += vec3(0.32,0.58,1.0) * fres * (0.05 + 0.5*smoothstep(-0.25, 0.6, d));
-      float tw = exp(-pow((d + 0.02)*7., 2.));
-      col += vec3(1.0,0.42,0.12) * tw * 0.07 * (0.3 + fres);
-      gl_FragColor = vec4(col, 1.);
-    }`
+    }
+    float fres = pow(1. - max(dot(n, v), 0.), 2.6);
+    col += vec3(0.32,0.58,1.0) * fres * (0.05 + 0.5*smoothstep(-0.25, 0.6, d));
+    float tw = exp(-pow((d + 0.02)*7., 2.));
+    col += vec3(1.0,0.42,0.12) * tw * 0.07 * (0.3 + fres);
+    float a = opacity;
+    if (edge > 0.){ float e = min(min(vUv.x, 1. - vUv.x), min(vUv.y, 1. - vUv.y)); a *= smoothstep(0., edge, e) * dayT.a; }
+    gl_FragColor = vec4(col, a);
+  }`;
+const EARTH_VERT = `
+  varying vec2 vUv; varying vec3 vN; varying vec3 vW;
+  void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position,1.); vW = w.xyz;
+    gl_Position = projectionMatrix * viewMatrix * w; }`;
+const earthMat = new THREE.ShaderMaterial({
+  uniforms: { dayMap: { value: blank }, nightMap: { value: blank }, specMap: { value: blank }, sunDir: sun,
+    useSpec: { value: 0 }, opacity: { value: 1 }, edge: { value: 0 }, nightK: { value: 2.4 }, nightP: { value: 1.6 } },
+  vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG
 });
-const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 160, 120), earthMat);
+const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 192, 144), earthMat);
 scene.add(earth);
+const texInfo = { day: 'none', night: 'none' };
+async function loadEarth(){
+  const [d, n] = await Promise.all([loadTex(TEX.dayLo), loadTex(TEX.nightLo)]);
+  if (d){ earthMat.uniforms.dayMap.value = d; texInfo.day = '1600x800'; }
+  if (n){ earthMat.uniforms.nightMap.value = n; texInfo.night = '2048x1024'; }
+  texturesDone = true; maybeReveal();
+  if (MAXTEX < 4096) return;
+  const [dh, nh, w] = await Promise.all([loadTex(TEX.dayHi), loadTex(TEX.nightHi), loadTex(TEX.water)]);
+  if (dh){ earthMat.uniforms.dayMap.value = dh; texInfo.day = '4096x2048'; d && d.dispose(); }
+  if (nh){ earthMat.uniforms.nightMap.value = nh; texInfo.night = '4096x2048'; n && n.dispose(); }
+  if (w){ earthMat.uniforms.specMap.value = w; earthMat.uniforms.useSpec.value = 1; }
+}
+
+/* sharp detail patch: NASA GIBS tiles (Blue Marble day, Black Marble night) for the area you are zoomed into */
+const GIBS = {
+  day: (z, r, c) => `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/500m/${z}/${r}/${c}.jpeg`,
+  night: (z, r, c) => `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/VIIRS_Black_Marble/default/2016-01-01/500m/${z}/${r}/${c}.png`
+};
+const PATCH_N = 4, TILE = 512;
+const patch = { mesh: null, key: '', busy: false, ver: 0, fade: 0, want: 0 };
+function makeCanvas(){ const c = document.createElement('canvas'); c.width = c.height = PATCH_N*TILE; return c; }
+function canvasTex(c){ const t = new THREE.CanvasTexture(c); return prep(t); }
+function patchWanted(){
+  const d = camera.position.length();
+  if (d > 2.3) return null;
+  const halfVis = (d - 1)*0.42/D2R;
+  let z = 7; while (z > 4 && 288/Math.pow(2, z) < 0.62*halfVis) z--;
+  const deg = 288/Math.pow(2, z), cols = Math.round(360/deg), rows = Math.round(180/deg);
+  const p = camera.position.clone().normalize(), lat = Math.asin(p.y)/D2R, lon = Math.atan2(-p.z, p.x)/D2R;
+  const c0 = Math.floor((lon + 180)/deg) - 1, r0 = Math.max(0, Math.min(rows - PATCH_N, Math.floor((90 - lat)/deg) - 1));
+  return { z, deg, cols, rows, c0, r0, key: `${z}:${r0}:${c0}`, lat, lon };
+}
+async function buildPatch(w){
+  patch.busy = true; const ver = ++patch.ver;
+  const center = ll2v(90 - (w.r0 + PATCH_N/2)*w.deg, (w.c0 + PATCH_N/2)*w.deg - 180), sd = center.dot(sun.value);
+  const needDay = sd > -0.35, needNight = sd < 0.35;
+  const dayC = makeCanvas(), nightC = makeCanvas();
+  const jobs = [];
+  const draw = (cv, url, x, y) => new Promise(res => {
+    const im = new Image(); im.crossOrigin = 'anonymous'; im.decoding = 'async';
+    im.onload = () => { cv.getContext('2d').drawImage(im, x, y, TILE, TILE); res(true); };
+    im.onerror = () => res(false); im.src = url;
+  });
+  for (let j = 0; j < PATCH_N; j++) for (let i = 0; i < PATCH_N; i++){
+    const r = w.r0 + j, c = ((w.c0 + i) % w.cols + w.cols) % w.cols;
+    if (needDay) jobs.push(draw(dayC, GIBS.day(w.z, r, c), i*TILE, j*TILE));
+    if (needNight) jobs.push(draw(nightC, GIBS.night(w.z, r, c), i*TILE, j*TILE));
+  }
+  const ok = (await Promise.all(jobs)).filter(Boolean).length;
+  patch.busy = false;
+  if (ver !== patch.ver || !ok) return;
+  if (!needDay){ const g = dayC.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, dayC.width, dayC.height); }
+  const span = PATCH_N*w.deg*D2R;
+  const geo = new THREE.SphereGeometry(1.0004, 96, 96, (w.c0*w.deg)*D2R, span, (w.r0*w.deg)*D2R, span);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { dayMap: { value: canvasTex(dayC) }, nightMap: { value: needNight ? canvasTex(nightC) : blank }, specMap: { value: blank },
+      sunDir: sun, useSpec: { value: 0 }, opacity: { value: 0 }, edge: { value: 0.07 }, nightK: { value: 1.5 }, nightP: { value: 2.2 } },
+    vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG, transparent: true, depthWrite: false
+  });
+  const m = new THREE.Mesh(geo, mat); m.renderOrder = 1;
+  if (patch.mesh){ const old = patch.mesh; scene.remove(old); old.geometry.dispose(); old.material.uniforms.dayMap.value.dispose(); if (old.material.uniforms.nightMap.value !== blank) old.material.uniforms.nightMap.value.dispose(); old.material.dispose(); }
+  patch.mesh = m; patch.fade = 0; scene.add(m);
+  texInfo.detail = `${PATCH_N*TILE}px tiles, level ${w.z}`;
+}
+let idleSince = 0;
+function stepPatch(now){
+  const w = patchWanted();
+  if (patch.mesh){
+    patch.fade += ((w ? 1 : 0) - patch.fade)*0.08;
+    patch.mesh.material.uniforms.opacity.value = patch.fade;
+    patch.mesh.visible = patch.fade > 0.01;
+  }
+  if (!w || patch.busy || fly || dragging || now - idleSince < 350) return;
+  if (w.key !== patch.key){ patch.key = w.key; buildPatch(w); }
+}
 
 const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.085, 96, 72), new THREE.ShaderMaterial({
   uniforms: { sunDir: sun }, side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -466,25 +731,6 @@ const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.085, 96, 72), new THREE.S
       gl_FragColor = vec4(c * g * 0.85, 1.); }`
 }));
 scene.add(atmo);
-
-/* ---------- stars ---------- */
-(function(){
-  const n = 7000, pos = new Float32Array(n*3), col = new Float32Array(n*3), sz = new Float32Array(n);
-  for (let i = 0; i < n; i++){
-    const u = Math.random()*2 - 1, th = Math.random()*Math.PI*2, s = Math.sqrt(1 - u*u), r = 120;
-    pos[i*3] = r*s*Math.cos(th); pos[i*3+1] = r*u; pos[i*3+2] = r*s*Math.sin(th);
-    const m = Math.pow(Math.random(), 7), b = 0.28 + 0.72*Math.pow(Math.random(), 3);
-    sz[i] = 1.1 + m*3.4;
-    const warm = Math.random();
-    col[i*3] = b*(warm > .8 ? 1.0 : .82); col[i*3+1] = b*(warm > .8 ? .9 : .88); col[i*3+2] = b*(warm > .8 ? .78 : 1.0);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.setAttribute('size', new THREE.BufferAttribute(sz, 1));
-  const m = pointMat(1.0); m.depthTest = true;
-  scene.add(new THREE.Points(g, m));
-})();
 
 function pointMat(alpha){
   const m = new THREE.ShaderMaterial({
@@ -500,12 +746,27 @@ function pointMat(alpha){
   sprMat.push(m);
   return m;
 }
+(function stars(){
+  const n = 7000, pos = new Float32Array(n*3), col = new Float32Array(n*3), sz = new Float32Array(n);
+  for (let i = 0; i < n; i++){
+    const u = Math.random()*2 - 1, th = Math.random()*Math.PI*2, s = Math.sqrt(1 - u*u), r = 120;
+    pos[i*3] = r*s*Math.cos(th); pos[i*3+1] = r*u; pos[i*3+2] = r*s*Math.sin(th);
+    const m = Math.pow(Math.random(), 7), b = 0.28 + 0.72*Math.pow(Math.random(), 3);
+    sz[i] = 1.1 + m*3.4;
+    const warm = Math.random() > .8;
+    col[i*3] = b*(warm ? 1.0 : .82); col[i*3+1] = b*(warm ? .9 : .88); col[i*3+2] = b*(warm ? .78 : 1.0);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('size', new THREE.BufferAttribute(sz, 1));
+  scene.add(new THREE.Points(g, pointMat(1.0)));
+})();
 
 /* ---------- satellites ---------- */
 let mainGeo, mainPrev, mainNext, mainCur, mainT0 = 0;
-let slGeo, slPts, slPrev, slNext, slCur, slT0 = 0;
+let slGeo, slPts, slPrev, slNext, slCur, slT0 = 0, slHasData = false;
 const COL = { base: [0.62,0.70,0.86], gold: [1.0,0.74,0.30], iss: [1.0,0.86,0.55] };
-
 function buildMain(n){
   mainCur = new Float32Array(n*3); mainPrev = new Float32Array(n*3); mainNext = new Float32Array(n*3);
   mainGeo = new THREE.BufferGeometry();
@@ -519,7 +780,7 @@ function buildMain(n){
 function recolor(){
   if (!mainGeo) return;
   const c = mainGeo.attributes.color.array, s = mainGeo.attributes.size.array;
-  const hot = new Set(curated().map(p => p.idx));
+  const hot = new Set(curated().filter(p => p.ref !== 'a').map(p => p.idx));
   const hotTrain = new Set(state.passes.filter(p => p.kind === 'train').map(p => p.train));
   state.sats.forEach((sat, i) => {
     let col = COL.base, size = 4.2;
@@ -542,20 +803,62 @@ function buildSl(n){
   slPts = new THREE.Points(slGeo, pointMat(0.0)); slPts.frustumCulled = false; slPts.renderOrder = 2; slPts.visible = false;
   scene.add(slPts);
 }
-let slHasData = false;
+/* tracked extra satellites (the ones up right now, on tonight's list, or selected) */
+const trk = { prev: new Map(), next: new Map(), cur: new Map(), t0: 0 };
+function takeTrk(ids, pos){
+  const now = performance.now(), next = new Map();
+  ids.forEach((id, k) => next.set(id, [pos[k*3], pos[k*3+1], pos[k*3+2]]));
+  trk.prev = new Map(); trk.cur.forEach((v, k) => trk.prev.set(k, v.slice()));
+  trk.next = next; trk.t0 = now;
+}
+function stepTrk(now){
+  const k = Math.min(1, (now - trk.t0)/500), cur = new Map();
+  trk.next.forEach((n, id) => {
+    const p = trk.prev.get(id);
+    cur.set(id, p && (p[0] || p[1]) ? [p[0] + (n[0]-p[0])*k, p[1] + (n[1]-p[1])*k, p[2] + (n[2]-p[2])*k] : n);
+  });
+  trk.cur = cur;
+}
+// "up right now" glow (teal)
+const NOWCAP = 4000;
+const nowGeo = new THREE.BufferGeometry();
+nowGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NOWCAP*3), 3).setUsage(THREE.DynamicDrawUsage));
+nowGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(NOWCAP*3), 3).setUsage(THREE.DynamicDrawUsage));
+nowGeo.setAttribute('size', new THREE.BufferAttribute(new Float32Array(NOWCAP), 1).setUsage(THREE.DynamicDrawUsage));
+nowGeo.setDrawRange(0, 0);
+const nowPts = new THREE.Points(nowGeo, pointMat(1.0)); nowPts.frustumCulled = false; nowPts.renderOrder = 4; scene.add(nowPts);
+function posOf(t, i){
+  if (t === 'm') return mainCur ? [mainCur[i*3], mainCur[i*3+1], mainCur[i*3+2]] : null;
+  return trk.cur.get(i) || null;
+}
+function stepNow(){
+  const list = (state.now && state.now.list) || [];
+  const P = nowGeo.attributes.position.array, C = nowGeo.attributes.color.array, S = nowGeo.attributes.size.array;
+  let n = 0;
+  for (const o of list){
+    if (n >= NOWCAP) break;
+    const p = posOf(o.t, o.i); if (!p) continue;
+    P[n*3] = p[0]; P[n*3+1] = p[1]; P[n*3+2] = p[2];
+    const b = o.lbl === 'Very faint' ? .55 : o.lbl === 'Faint' ? .8 : 1;
+    C[n*3] = .38*b; C[n*3+1] = .96*b; C[n*3+2] = .84*b;
+    S[n] = o.lbl === 'Very faint' ? 6 : o.lbl === 'Faint' ? 7.5 : 10;
+    n++;
+  }
+  nowGeo.setDrawRange(0, n);
+  nowGeo.attributes.position.needsUpdate = nowGeo.attributes.color.needsUpdate = nowGeo.attributes.size.needsUpdate = true;
+}
 
-/* ring sprites (ISS + selection) */
+/* rings (ISS + selection), drawn crisp at any pixel ratio */
 function ringTexture(){
-  const c = document.createElement('canvas'); c.width = c.height = 128;
-  const x = c.getContext('2d');
-  x.strokeStyle = 'rgba(255,216,138,1)'; x.lineWidth = 6;
-  x.beginPath(); x.arc(64, 64, 46, 0, Math.PI*2); x.stroke();
-  const t = new THREE.CanvasTexture(c); return t;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'); x.strokeStyle = 'rgba(255,216,138,1)'; x.lineWidth = 10;
+  x.beginPath(); x.arc(128, 128, 96, 0, Math.PI*2); x.stroke();
+  return prep(new THREE.CanvasTexture(c));
 }
 const ringTex = ringTexture();
 function ringSprite(scale){
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: false }));
-  s.scale.set(scale, scale, 1); s.visible = false; s.renderOrder = 4; scene.add(s); return s;
+  s.scale.set(scale, scale, 1); s.visible = false; s.renderOrder = 5; scene.add(s); return s;
 }
 const issRing = ringSprite(0.05), selRing = ringSprite(0.06);
 
@@ -576,37 +879,32 @@ function setPath(pts){
 /* home pin */
 const home = new THREE.Group(); home.visible = false; scene.add(home);
 const pinMat = new THREE.MeshBasicMaterial({ color: 0xffd88a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-const pinDot = new THREE.Mesh(new THREE.CircleGeometry(0.35, 32), pinMat);
-const pinRing = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.74, 64), pinMat.clone());
-const pulse = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 64), pinMat.clone());
-home.add(pinDot, pinRing, pulse);
+const pulse = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 96), pinMat.clone());
+home.add(new THREE.Mesh(new THREE.CircleGeometry(0.35, 48), pinMat), new THREE.Mesh(new THREE.RingGeometry(0.62, 0.74, 96), pinMat.clone()), pulse);
+home.renderOrder = 6;
 
 /* ---------- camera fly ---------- */
-let fly = null;
+let fly = null, dragging = false;
 const ease = k => k < .5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3)/2;
 function flyTo(dir, dist, dur = 2400){
-  const q0 = camera.position.clone().normalize(), q1 = dir.clone().normalize();
-  fly = { q0, q1, d0: camera.position.length(), d1: dist, t0: performance.now(), dur };
+  fly = { q0: camera.position.clone().normalize(), q1: dir.clone().normalize(), d0: camera.position.length(), d1: dist, t0: performance.now(), dur };
   controls.enabled = false; controls.autoRotate = false;
 }
 function stepFly(now){
   if (!fly) return;
-  let k = Math.min(1, (now - fly.t0)/fly.dur); const e = ease(k);
+  const k = Math.min(1, (now - fly.t0)/fly.dur), e = ease(k);
   const a = Math.acos(Math.min(1, Math.max(-1, fly.q0.dot(fly.q1))));
-  let v;
-  if (a < 1e-4) v = fly.q1.clone();
-  else v = fly.q0.clone().multiplyScalar(Math.sin((1-e)*a)/Math.sin(a)).add(fly.q1.clone().multiplyScalar(Math.sin(e*a)/Math.sin(a)));
-  const lift = Math.sin(Math.PI*e) * Math.min(0.6, a*0.35);
-  camera.position.copy(v.normalize().multiplyScalar(fly.d0 + (fly.d1 - fly.d0)*e + lift));
+  const v = a < 1e-4 ? fly.q1.clone()
+    : fly.q0.clone().multiplyScalar(Math.sin((1-e)*a)/Math.sin(a)).add(fly.q1.clone().multiplyScalar(Math.sin(e*a)/Math.sin(a)));
+  camera.position.copy(v.normalize().multiplyScalar(fly.d0 + (fly.d1 - fly.d0)*e + Math.sin(Math.PI*e)*Math.min(0.6, a*0.35)));
   camera.lookAt(0,0,0);
-  if (k >= 1){ fly = null; controls.enabled = true; controls.update(); }
+  if (k >= 1){ fly = null; controls.enabled = true; controls.update(); idleSince = performance.now(); }
 }
 camera.position.copy(ll2v(18, -40, 1).multiplyScalar(4));
 
 /* ---------- worker ---------- */
 function startWorker(tles){
-  const blob = new Blob([$('#workerSrc').textContent], { type: 'text/javascript' });
-  const w = new Worker(URL.createObjectURL(blob));
+  const w = new Worker(URL.createObjectURL(new Blob([$('#workerSrc').textContent], { type: 'text/javascript' })));
   state.worker = w;
   w.onmessage = e => {
     const m = e.data;
@@ -619,26 +917,32 @@ function startWorker(tles){
     } else if (m.type === 'pos'){
       const now = performance.now();
       if (m.main){
-        if (!mainT0){ mainCur.set(m.main); mainPrev.set(m.main); }
-        else mainPrev.set(mainCur);
+        if (!mainT0){ mainCur.set(m.main); mainPrev.set(m.main); } else mainPrev.set(mainCur);
         mainNext = m.main; mainT0 = now;
       }
+      if (m.trk) takeTrk(Array.from(m.trk), m.trkPos);
       if (m.sl){
-        if (!slHasData){ slCur.set(m.sl); slPrev.set(m.sl); slHasData = true; }
-        else slPrev.set(slCur);
+        if (!slHasData){ slCur.set(m.sl); slPrev.set(m.sl); slHasData = true; } else slPrev.set(slCur);
         slNext = m.sl; slT0 = now;
       }
     } else if (m.type === 'passes'){
-      state.passes = m.passes; state.passesReady = true;
-      recolor(); renderCard(); renderList();
+      state.passes = m.passes; state.passesReady = true; refresh();
+    } else if (m.type === 'now'){
+      state.now = m; refreshNow();
+    } else if (m.type === 'counting'){
+      state.counting = true; refreshLists();
+    } else if (m.type === 'evening'){
+      state.counting = false; state.evening = m; refresh();
+    } else if (m.type === 'timing'){
+      console.info('overhead timing ms', m);
     } else if (m.type === 'path'){
-      if (state.sel && state.sel.t === 'm' && state.sel.i === m.idx) setPath(m.pts);
+      if (state.sel && state.sel.t === m.t && state.sel.i === m.idx) setPath(m.pts);
     }
   };
-  w.postMessage({ type: 'init', ...tles });
+  w.postMessage({ type: 'init', ...tles, off: OFF });
 }
 
-/* ---------- data ---------- */
+/* ---------- data (CelesTrak allows one download per group every 2 hours, so keep a copy) ---------- */
 async function getTLE(group, alt){
   const url = alt || `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`;
   let cache = null, hit = null, age = Infinity;
@@ -651,42 +955,40 @@ async function getTLE(group, alt){
       return t;
     }
   } catch (e) {}
-  if (hit) return hit.text();
-  return (!alt && group === 'starlink') ? getTLE(group, 'https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=starlink&FORMAT=tle') : '';
+  return hit ? hit.text() : '';
 }
 async function loadData(){
-  const [visual, stations, starlink] = await Promise.all([getTLE('visual'), getTLE('stations'), getTLE('starlink')]);
-  if (!visual && !stations){ state.dataError = true; renderCard(); maybeReveal(true); return; }
-  startWorker({ visual, stations, starlink });
+  const [visual, stations, active0] = await Promise.all([getTLE('visual'), getTLE('stations'), getTLE('active')]);
+  let active = active0;
+  if (!active) active = await getTLE('starlink');
+  if (!active) active = await getTLE('starlink', 'https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=starlink&FORMAT=tle');
+  if (!visual && !stations){ state.dataError = true; refresh(); maybeReveal(true); return; }
+  startWorker({ visual, stations, active });
 }
 
 /* ---------- location ---------- */
+let pendingFly = false;
 function askLocation(){
-  if (!navigator.geolocation){ state.locError = 'none'; renderCard(); return; }
-  state.locating = true; renderCard();
+  if (!navigator.geolocation){ state.locError = 'none'; refresh(); return; }
+  state.locating = true; refresh();
   navigator.geolocation.getCurrentPosition(p => {
     state.locating = false; state.locError = null;
     state.obs = { lat: p.coords.latitude, lon: p.coords.longitude, alt: p.coords.altitude || 0 };
-    placeHome();
+    const v = ll2v(state.obs.lat, state.obs.lon, 1.0006);
+    home.position.copy(v); home.lookAt(v.clone().multiplyScalar(2)); home.visible = true;
+    if (revealed) flyTo(v, flyDist(), 2800); else pendingFly = true;
     if (state.worker && state.sats.length) state.worker.postMessage({ type: 'obs', ...state.obs });
-    renderCard();
-  }, err => {
-    state.locating = false; state.locError = err.code === 1 ? 'denied' : 'fail'; renderCard();
-  }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 10*60000 });
+    refresh();
+  }, err => { state.locating = false; state.locError = err.code === 1 ? 'denied' : 'fail'; refresh(); },
+  { enableHighAccuracy: false, timeout: 15000, maximumAge: 10*60000 });
 }
-function placeHome(){
-  const p = ll2v(state.obs.lat, state.obs.lon, 1.0015);
-  home.position.copy(p); home.lookAt(p.clone().multiplyScalar(2)); home.visible = true;
-  if (revealed) flyTo(p, flyDist(), 2800);
-  else pendingFly = true;
-}
-let pendingFly = false;
 
 /* ---------- words ---------- */
 const DIRS = ['North','Northeast','East','Southeast','South','Southwest','West','Northwest'];
 const dir = az => DIRS[Math.round(az/45) % 8];
 const height = el => el < 25 ? 'low in the sky' : el < 55 ? 'halfway up' : 'high overhead';
 const climb = el => el < 25 ? 'stays low' : el < 55 ? 'climbs halfway up' : 'passes high overhead';
+const tcase = n => n.split(/\s+/).map(w => w.split('-').map(x => (/\d/.test(x) || /^[A-Z]{2,4}$/.test(x)) ? x : x.charAt(0) + x.slice(1).toLowerCase()).join('-')).join(' ');
 function friendly(s){
   if (!s) return 'Satellite';
   if (s.kind === 'iss') return 'International Space Station';
@@ -694,8 +996,8 @@ function friendly(s){
   if (s.kind === 'hst') return 'Hubble Space Telescope';
   if (s.kind === 'train') return 'Starlink train';
   if (s.kind === 'rb') return 'Old rocket stage';
-  const n = s.name.replace(/\(.*?\)/g, '').replace(/\bDEB\b/, '').replace(/-(?=\d)/g, ' ').trim();
-  return n.split(/\s+/).map(w => (/\d/.test(w) || /^[A-Z]{2,4}$/.test(w)) ? w : w.split('-').map(x => x.charAt(0) + x.slice(1).toLowerCase()).join('-')).join(' ') || 'Satellite';
+  const n = (s.name || '').replace(/\(.*?\)|\[.*?\]/g, '').replace(/\bDEB\b/, '').replace(/-(?=\d)/g, ' ').trim();
+  return tcase(n) || 'Satellite';
 }
 function blurb(s){
   switch (s.kind){
@@ -704,56 +1006,137 @@ function blurb(s){
     case 'hst': return 'The famous space telescope, about 330 miles up. Launched in 1990.';
     case 'train': return 'A fresh batch of Starlink satellites flying in a line, like a string of lights.';
     case 'rb': return `The leftover top of a rocket${s.year ? `, launched in ${s.year}` : ''}. It tumbles, so it can flicker.`;
-    case 'sl': return "One of SpaceX's Starlink internet satellites. Thousands of them circle the Earth.";
+    case 'star': return "One of SpaceX's Starlink internet satellites. Faint, so give your eyes a few minutes in the dark.";
+    case 'act': return `A working satellite${s.year ? ` launched in ${s.year}` : ''}. Very faint, you need dark eyes and a dark sky.`;
     default: return `A satellite${s.year ? ` launched in ${s.year}` : ''}, bright enough to see with no telescope.`;
   }
 }
-function chip(p){
+function chipFor(p){
+  if (p.lbl) return p.lbl;
   if (p.kind === 'iss') return 'Very bright';
-  if (p.kind === 'css') return 'Bright';
   if (p.kind === 'train') return 'String of lights';
-  return p.peakEl >= 60 ? 'Bright' : 'Easy to see';
+  if (p.kind === 'rb') return p.peakRng && p.peakRng >= 1200 ? 'Faint' : 'Bright';
+  return 'Bright';
 }
+const chipCls = l => l === 'Faint' ? 'chip faint' : l === 'Very faint' ? 'chip vfaint' : 'chip';
 function hm(t){ const d = new Date(t); let h = d.getHours(); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return { t: `${h}:${String(d.getMinutes()).padStart(2,'0')}`, ap }; }
+const hmS = t => { const x = hm(t); return `${x.t} ${x.ap}`; };
 function dayWord(t){
-  const d = new Date(t), n = new Date(), h = d.getHours();
+  const d = new Date(t), n = new Date(nowMs()), h = d.getHours();
   const tm = new Date(n); tm.setDate(n.getDate() + 1);
   if (d.toDateString() === n.toDateString()) return h >= 17 ? 'Tonight' : h < 5 ? 'Early this morning' : h < 12 ? 'This morning' : 'This afternoon';
   if (d.toDateString() === tm.toDateString()) return (h < 5 && n.getHours() >= 17) ? 'Late tonight' : h < 12 ? 'Tomorrow morning' : h >= 17 ? 'Tomorrow night' : 'Tomorrow';
   return d.toLocaleDateString([], { weekday: 'long' });
 }
 function shortDay(t){
-  const d = new Date(t), n = new Date(), tm = new Date(n); tm.setDate(n.getDate() + 1);
+  const d = new Date(t), n = new Date(nowMs()), tm = new Date(n); tm.setDate(n.getDate() + 1);
   if (d.toDateString() === n.toDateString()) return d.getHours() >= 17 ? 'TONIGHT' : 'TODAY';
   if (d.toDateString() === tm.toDateString()) return (d.getHours() < 5 && n.getHours() >= 17) ? 'TONIGHT' : 'TOMORROW';
   return d.toLocaleDateString([], { weekday: 'short' }).toUpperCase();
 }
 function until(p){
-  const now = Date.now();
+  const now = nowMs();
   if (now >= p.start && now <= p.end) return { txt: 'Up now', now: true };
   const m = Math.round((p.start - now)/60000);
   if (m < 1) return { txt: 'in under a minute' };
   if (m < 60) return { txt: `in ${m} min` };
   return { txt: `in ${Math.floor(m/60)} h ${m % 60} min` };
 }
-function curated(){
-  const now = Date.now(), special = p => ['iss','css','train','hst'].includes(p.kind);
-  let keep = state.passes.filter(p => p.end > now && (special(p) || (p.peakEl >= 45 && (p.end - p.start) >= 180000)));
-  if (keep.length > 10){
-    const sp = keep.filter(special), eve = p => { const h = new Date(p.start).getHours(); return h >= 18 || h < 1 ? 60 : 0; }, score = p => p.peakEl + (p.end - p.start)/20000 + eve(p);
-    keep = sp.concat(keep.filter(p => !special(p)).sort((a,b) => score(b) - score(a)).slice(0, Math.max(0, 10 - sp.length)));
-  }
-  return keep.sort((a,b) => a.start - b.start);
-}
 const mins = p => Math.max(1, Math.round((p.end - p.start)/60000));
 const lookAz = p => p.peakEl >= 55 ? p.startAz : p.peakAz;
 const lookWords = p => p.peakEl >= 70 ? `Look ${dir(p.startAz)}, then straight up` : p.peakEl >= 55 ? `Look ${dir(p.startAz)}, then high up` : `Look ${dir(p.peakAz)}, ${height(p.peakEl)}`;
+const shortLook = p => `Look ${dir(lookAz(p))}`;
 function pathWords(p){ return `Appears in the ${dir(p.startAz)}, ${climb(p.peakEl)}, and fades in the ${dir(p.endAz)}. Visible for about ${mins(p)} minute${mins(p) > 1 ? 's' : ''}.`; }
-function satForPass(p){ return state.sats[p.idx]; }
-function nameForPass(p){ return friendly(satForPass(p)); }
+function passName(p){ return p.ref === 'a' ? friendly(p) : friendly(state.sats[p.idx]); }
 
-/* ---------- card ---------- */
-let cardKey = '';
+/* curated list: the bright ones, plus a handful of the best faint passes this evening */
+function brightList(){
+  const now = nowMs(), special = p => ['iss','css','train','hst'].includes(p.kind);
+  const score = p => { const h = new Date(p.start).getHours(); return p.peakEl + (p.end - p.start)/20000 + (h >= 18 || h < 1 ? 60 : 0); };
+  let keep = state.passes.filter(p => p.end > now && (special(p) || (p.peakEl >= 30 && (p.end - p.start) >= 120000)));
+  const rb = keep.filter(p => p.kind === 'rb').sort((a,b) => score(b) - score(a)).slice(0, 3);
+  keep = keep.filter(p => p.kind !== 'rb').concat(rb);
+  const sp = keep.filter(special);
+  keep = sp.concat(keep.filter(p => !special(p)).sort((a,b) => score(b) - score(a)).slice(0, Math.max(0, 9 - sp.length)));
+  return keep;
+}
+function curated(){
+  const now = nowMs();
+  const faint = ((state.evening && state.evening.faint) || []).filter(p => p.end > now);
+  return brightList().concat(faint).sort((a,b) => a.start - b.start).slice(0, 14);
+}
+const nextBright = () => brightList().sort((a,b) => a.start - b.start)[0];
+
+/* ---------- sheet ---------- */
+const sheet = $('#sheet'), bar = $('#bar'), detail = $('#detail');
+const ui = { snap: 'peek', tab: 'tonight', y: 0, H: 0, safeB: 0 };
+function snapY(s){
+  const peek = $('#handle').offsetHeight + bar.offsetHeight + ui.safeB;
+  if (s === 'peek') return ui.H - peek;
+  if (s === 'half') return Math.max(0, ui.H - (peek + ui.detailH));
+  return 0;
+}
+function measureDetail(){ if (!sheet.classList.contains('full')) ui.detailH = detail.offsetHeight; }
+function applyY(y){ ui.y = y; sheet.style.transform = `translate3d(0,${y}px,0)`; }
+function sheetLayout(){
+  ui.H = sheet.offsetHeight; ui.safeB = $('#probe').offsetHeight; measureDetail();
+  if (revealed) applyY(snapY(ui.snap));
+}
+function setSnap(s){
+  ui.snap = s;
+  sheet.classList.toggle('full', s === 'full');
+  sheet.classList.remove('drag');
+  if (s === 'full') refreshLists();
+  requestAnimationFrame(() => { measureDetail(); applyY(snapY(s)); });
+}
+function openTab(tab){ ui.tab = tab; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); setSnap('full'); refreshLists(); $('#scroll').scrollTop = 0; }
+// drag the handle, the bar or the tabs
+let sd = null;
+function sdStart(e){
+  if (e.button > 0) return;
+  sd = { y0: e.clientY, Y0: ui.y, t: performance.now(), hist: [[performance.now(), e.clientY]], moved: false, target: e.target };
+  sheet.classList.add('drag');
+}
+window.addEventListener('pointermove', e => {
+  if (!sd) return;
+  const dy = e.clientY - sd.y0;
+  if (Math.abs(dy) > 6) sd.moved = true;
+  if (!sd.moved) return;
+  const lo = 0, hi = snapY('peek');
+  let y = sd.Y0 + dy;
+  if (y < lo) y = lo - Math.sqrt(lo - y)*3; if (y > hi) y = hi + Math.sqrt(y - hi)*3;
+  applyY(y);
+  sd.hist.push([performance.now(), e.clientY]); if (sd.hist.length > 6) sd.hist.shift();
+});
+window.addEventListener('pointerup', e => {
+  if (!sd) return;
+  const s = sd; sd = null;
+  if (!s.moved){
+    sheet.classList.remove('drag');
+    if (s.target.closest('#nowChip')) return openTab('now');
+    if (s.target.closest('#tabs')){ const b = s.target.closest('button'); if (b) openTab(b.dataset.tab); return; }
+    if (s.target.closest('#bar') || s.target.closest('#handle')) setSnap(ui.snap === 'peek' ? 'half' : 'peek');
+    return;
+  }
+  const h = s.hist, a = h[0], b = h[h.length - 1], v = (b[1] - a[1])/Math.max(16, b[0] - a[0]);
+  const order = ['full','half','peek'], ys = order.map(snapY);
+  let target;
+  if (v < -0.45){ const c = order.filter((o, i) => ys[i] < ui.y - 4); target = c.length ? c[c.length - 1] : 'full'; }
+  else if (v > 0.45){ const c = order.filter((o, i) => ys[i] > ui.y + 4); target = c.length ? c[0] : 'peek'; }
+  else { let bi = 0; ys.forEach((yy, i) => { if (Math.abs(yy - ui.y) < Math.abs(ys[bi] - ui.y)) bi = i; }); target = order[bi]; }
+  if (target === 'full' && ui.snap !== 'full') sheet.classList.add('full');
+  setSnap(target);
+});
+['#handle', '#bar', '#tabs'].forEach(sel => $(sel).addEventListener('pointerdown', sdStart));
+// pull down on the top of a list to go back to the card
+(function(){
+  const sc = $('#scroll'); let y0 = null, top = false;
+  sc.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; top = sc.scrollTop <= 0; }, { passive: true });
+  sc.addEventListener('touchend', e => { if (y0 != null && top && e.changedTouches[0].clientY - y0 > 70) setSnap('half'); y0 = null; }, { passive: true });
+})();
+
+/* ---------- card + bar ---------- */
+let detailKey = '';
 function compassSvg(az){
   return `<div class="compass"><b>N</b><svg viewBox="0 0 46 46" style="transform:rotate(${az}deg)">
     <path d="M23 9 L28 25 L23 22 L18 25 Z" fill="#ffd88a"/><circle cx="23" cy="23" r="2.2" fill="#ffd88a" opacity=".6"/></svg></div>`;
@@ -765,27 +1148,37 @@ function passBlock(p){
     <div class="look">${compassSvg(lookAz(p))}<div>${lookWords(p)}</div></div>
     <div class="path">${pathWords(p)}</div>`;
 }
-function renderCard(){
-  const el = $('#cardInner'); let html, key;
-  const next = curated()[0];
+function selInfo(){
+  const s = state.sel; if (!s) return null;
+  const sat = s.t === 'm' ? state.sats[s.i] : s.info;
+  const now = nowMs();
+  const p = s.t === 'm'
+    ? state.passes.find(q => (q.idx === s.i || (sat.kind === 'train' && q.train === sat.train)) && q.end > now)
+    : ((state.evening && state.evening.faint) || []).find(q => q.ai === s.i && q.end > now);
+  const up = ((state.now && state.now.list) || []).find(o => o.t === s.t && o.i === s.i);
+  return { sat, p, up };
+}
+function renderDetail(){
+  let html, key;
+  const next = nextBright();
   if (state.dataError){
     key = 'err';
     html = `<div class="eyebrow">Overhead</div><div class="name">Can't reach the satellite data</div>
       <div class="empty">Check your connection and try again.</div>
       <div class="actions"><button class="btn gold" data-act="reload">Try again</button></div>`;
   } else if (state.sel){
-    const s = state.sel.t === 'm' ? state.sats[state.sel.i] : { kind: 'sl', name: 'Starlink' };
-    const nm = state.sel.t === 'm' ? friendly(s) : 'Starlink satellite';
-    const p = state.sel.t === 'm' ? state.passes.find(q => (q.idx === state.sel.i || (s.kind === 'train' && q.train === s.train)) && q.end > Date.now()) : null;
-    key = 'sel' + state.sel.t + state.sel.i + (p ? p.start : 'x');
-    html = `<div class="eyebrow"><span>${p ? 'Next time over you' : 'Satellite'}</span>${p ? `<span class="chip">${chip(p)}</span>` : ''}</div>
-      <div class="name">${nm}</div><div class="empty" style="margin-top:6px">${blurb(s)}</div>
-      ${p ? passBlock(p) : `<div class="empty" style="color:var(--faint)">${state.obs ? "You won't be able to see this one in the next day." : ''}</div>`}
+    const { sat, p, up } = selInfo();
+    const lbl = up ? up.lbl : p ? chipFor(p) : '';
+    key = 'sel' + state.sel.t + state.sel.i + (p ? p.start : 'x') + (up ? 'u' + Math.round(up.az/45) + Math.round(up.el/20) : '');
+    html = `<div class="eyebrow"><span>${up ? 'Up there right now' : p ? 'Next time over you' : 'Satellite'}</span>${lbl ? `<span class="${chipCls(lbl)}">${lbl}</span>` : ''}</div>
+      <div class="name">${friendly(sat)}</div><div class="empty" style="margin-top:6px">${blurb(sat)}</div>
+      ${up ? `<div class="look">${compassSvg(up.az)}<div>Look ${dir(up.az)}, ${height(up.el)}, moving toward the ${dir(up.hd)}</div></div>`
+        : p ? passBlock(p) : `<div class="empty" style="color:var(--faint)">${state.obs ? "You won't be able to see this one this evening." : ''}</div>`}
       <div class="actions"><button class="btn slim" data-act="back">Back</button><button class="btn gold" data-act="list">Full list</button></div>`;
   } else if (!state.obs){
     key = 'loc' + state.locError + state.locating;
     html = state.locating
-      ? `<div class="eyebrow">Next over you</div><div class="name">Finding where you are</div><div class="skel" style="width:70%"></div><div class="skel" style="width:45%"></div>`
+      ? `<div class="eyebrow">Next over you</div><div class="skel" style="width:70%"></div><div class="skel" style="width:45%"></div>`
       : `<div class="eyebrow">Next over you</div><div class="name">Where are you?</div>
         <div class="empty">${state.locError === 'denied'
           ? 'Location is turned off for this page. On iPhone: Settings, Privacy, Location Services, Safari Websites, then allow.'
@@ -793,84 +1186,144 @@ function renderCard(){
         <div class="actions"><button class="btn gold" data-act="loc">Use my location</button></div>`;
   } else if (!state.passesReady){
     key = 'calc';
-    html = `<div class="eyebrow">Next over you</div><div class="name">Working out tonight's sky</div><div class="skel" style="width:80%"></div><div class="skel" style="width:55%"></div>`;
+    html = `<div class="eyebrow">Next over you</div><div class="skel" style="width:80%"></div><div class="skel" style="width:55%"></div>`;
   } else if (!next){
     key = 'none';
     html = `<div class="eyebrow">Next over you</div><div class="name">Nothing bright in the next day</div>
-      <div class="empty">Check back tomorrow. Spin the globe to watch everything in orbit.</div>`;
+      <div class="empty">Open the list to see the fainter ones.</div>
+      <div class="actions"><button class="btn gold" data-act="list">Full list</button></div>`;
   } else {
     key = 'next' + next.idx + next.start;
-    const more = curated().length;
-    html = `<div class="eyebrow"><span>Next over you</span><span class="chip">${chip(next)}</span></div>
-      <div class="name">${nameForPass(next)}</div>${passBlock(next)}
-      <div class="actions"><button class="btn gold" data-act="list">See all ${more} coming up</button></div>`;
+    html = `<div class="eyebrow" style="margin-top:2px"><span class="name" style="margin:0;color:var(--ink);letter-spacing:-.2px;text-transform:none">${passName(next)}</span><span class="${chipCls(chipFor(next))}">${chipFor(next)}</span></div>
+      ${passBlock(next)}
+      <div class="actions"><button class="btn gold" data-act="list">See all ${curated().length} coming up</button></div>`;
   }
-  if (key === cardKey) return;
-  const first = !cardKey; cardKey = key;
-  if (first){ el.innerHTML = html; return; }
-  el.classList.add('swap');
-  setTimeout(() => { el.innerHTML = html; el.classList.remove('swap'); }, 260);
+  if (key === detailKey) return;
+  const first = !detailKey; detailKey = key;
+  if (first){ detail.innerHTML = html; measureDetail(); return; }
+  detail.classList.add('swap');
+  setTimeout(() => { detail.innerHTML = html; detail.classList.remove('swap'); measureDetail(); if (ui.snap === 'half') applyY(snapY('half')); }, 200);
 }
-setInterval(() => {
-  const n = $('[data-count]');
-  if (!n) return;
-  const p = state.sel && state.sel.t === 'm'
-    ? state.passes.find(q => (q.idx === state.sel.i || (state.sats[state.sel.i].kind === 'train' && q.train === state.sats[state.sel.i].train)) && q.end > Date.now())
-    : curated()[0];
-  if (!p){ cardKey = ''; renderCard(); return; }
-  const u = until(p); n.textContent = u.txt; n.classList.toggle('now', !!u.now);
-  renderCard();
-}, 1000);
-
-$('#card').addEventListener('click', e => {
+function renderBar(){
+  let eye = 'Next over you', main = '', sub = '';
+  if (state.dataError){ main = "Can't reach the satellite data"; sub = 'Tap to try again'; }
+  else if (state.sel){
+    const { sat, p, up } = selInfo();
+    eye = up ? 'Up right now' : 'Selected';
+    main = friendly(sat);
+    sub = up ? `Look ${dir(up.az)}, ${height(up.el)}` : p ? `${hmS(p.start)}, ${shortLook(p)}, ${until(p).txt.toLowerCase()}` : 'Not over you this evening';
+  } else if (!state.obs){ main = state.locating ? 'Finding where you are' : 'Where are you?'; sub = state.locating ? '' : 'Tap to share your location'; }
+  else if (!state.passesReady){ main = "Working out tonight's sky"; }
+  else {
+    const n = nextBright();
+    if (n){ main = `${hmS(n.start)}  ${shortLook(n)}`; sub = `${passName(n)}, ${until(n).txt.toLowerCase()}`; }
+    else { main = 'Nothing bright in the next day'; sub = 'Open the list for fainter ones'; }
+  }
+  $('#barEye').textContent = eye; $('#barMain').textContent = main; $('#barSub').textContent = sub || ' ';
+  const chip = $('#nowChip'), now = state.now;
+  if (!state.obs){ chip.style.display = 'none'; return; }
+  chip.style.display = '';
+  chip.classList.toggle('off', !(now && now.dark));
+  $('#nowChipTxt').textContent = !now ? 'Right now' : now.dark ? `Right now: ${now.list.length}` : 'Right now';
+  $('#tabN').textContent = now && now.dark ? ` ${now.list.length}` : '';
+}
+detail.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
-  if (a === 'list') openSheet();
+  if (a === 'list') openTab('tonight');
   else if (a === 'back') select(null);
   else if (a === 'loc') askLocation();
   else if (a === 'reload') location.reload();
 });
-
-/* ---------- sheet ---------- */
-function renderList(){
-  const now = Date.now(), items = curated();
-  $('#list').innerHTML = items.length ? items.map(p => {
-    const T = hm(p.start), live = now >= p.start;
-    return `<button class="row ${live ? 'live' : ''}" data-i="${p.idx}"><div class="t">${T.t}<small>${live ? 'UP NOW' : T.ap + ' ' + shortDay(p.start)}</small></div>
-      <div><div class="n">${nameForPass(p)}</div><div class="l">${lookWords(p)}</div></div>
-      <span class="chip">${chip(p)}</span></button>`;
-  }).join('') : `<div class="none">${state.obs ? 'Nothing bright passes over you in the next day.' : 'Share your location to see what flies over you.'}</div>`;
-}
-function openSheet(){ renderList(); $('#sheet').classList.add('show'); $('#scrim').classList.add('show'); }
-function closeSheet(){ $('#sheet').classList.remove('show'); $('#scrim').classList.remove('show'); }
-$('#scrim').onclick = closeSheet; $('#sheetX').onclick = closeSheet;
-$('#list').addEventListener('click', e => {
-  const r = e.target.closest('.row'); if (!r) return;
-  closeSheet(); select({ t: 'm', i: +r.dataset.i }, true);
+bar.addEventListener('click', e => {
+  if (e.target.closest('#nowChip')) return;
+  if (!state.obs && !state.locating && ui.snap === 'peek') askLocation();
+  if (state.dataError) location.reload();
 });
-function swipe(el, onUp, onDown){
-  let y0 = null;
-  el.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
-  el.addEventListener('touchend', e => {
-    if (y0 == null) return; const dy = e.changedTouches[0].clientY - y0; y0 = null;
-    if (dy < -40 && onUp) onUp(); if (dy > 60 && onDown) onDown();
-  }, { passive: true });
+
+/* ---------- lists ---------- */
+function tonightHead(){
+  const ev = state.evening;
+  if (!state.obs) return '';
+  if (state.counting || !ev) return `<div class="head"><div class="lead">Counting tonight's satellites</div><div class="skel" style="width:60%"></div></div>`;
+  if (!ev.dark) return `<div class="head"><div class="lead">It won't get dark enough before 10 PM tonight.</div></div>`;
+  const tom = new Date(ev.end).toDateString() !== new Date(nowMs()).toDateString();
+  const from = ev.start > nowMs() + 60000 ? hm(ev.start).t : null;
+  const when = from ? `${tom ? 'Tomorrow night' : 'Tonight'} between ${from} and 10 PM` : 'Between now and 10 PM';
+  return `<div class="head"><div class="big">${ev.count}</div><div class="lead">${when}, about <em>${ev.count} satellites</em> will cross your sky.</div>
+    <div class="note">Counting the ones you can really spot. Faint ones need dark eyes.</div></div>`;
 }
-swipe($('#card'), () => { if (state.obs) openSheet(); });
-swipe($('#sheet').querySelector('.grab'), null, closeSheet);
-swipe($('#sheet').querySelector('header'), null, closeSheet);
+function renderTonight(){
+  const now = nowMs(), items = curated();
+  const rows = items.map(p => {
+    const T = hm(p.start), live = now >= p.start, lbl = chipFor(p);
+    const ref = p.ref === 'a' ? `a:${p.ai}` : `m:${p.idx}`;
+    return `<button class="row ${live ? 'live' : ''}" data-ref="${ref}"><div class="t">${T.t}<small>${live ? 'UP NOW' : T.ap + ' ' + shortDay(p.start)}</small></div>
+      <div><div class="n">${passName(p)}</div><div class="l">${lookWords(p)}</div></div>
+      <span class="${chipCls(lbl)}">${lbl}</span></button>`;
+  }).join('');
+  return tonightHead() + (rows || `<div class="none">${state.obs ? 'Nothing passes over you in the next day.' : 'Share your location to see what flies over you.'}</div>`);
+}
+function renderNow(){
+  const n = state.now;
+  if (!state.obs) return `<div class="none">Share your location to see what is up there.</div>`;
+  if (!n) return `<div class="head"><div class="lead">Looking up</div><div class="skel" style="width:60%"></div></div>`;
+  if (!n.dark) return `<div class="head"><div class="lead">It's still too light out.</div>
+    <div class="note">Satellites show up after about ${n.darkAt ? hmS(n.darkAt) : 'dark'}${n.darkAt && new Date(n.darkAt).toDateString() !== new Date(nowMs()).toDateString() ? ' tomorrow' : ''}.</div></div>`;
+  const c = { 'Very bright': 0, 'Bright': 0, 'Faint': 0, 'Very faint': 0 };
+  n.list.forEach(o => c[o.lbl]++);
+  const mix = [['Bright', c['Very bright'] + c['Bright'], 'chip'], ['Faint', c['Faint'], 'chip faint'], ['Very faint', c['Very faint'], 'chip vfaint']]
+    .filter(x => x[1]).map(x => `<span class="${x[2]}">${x[1]} ${x[0].toLowerCase()}</span>`).join('');
+  const rows = n.list.slice(0, 80).map(o => `<button class="row now" data-ref="${o.t}:${o.i}"><div class="dot ${o.lbl === 'Very faint' ? 'dim' : ''}"></div>
+      <div><div class="n">${friendly(o)}</div><div class="l">${dir(o.az)}, ${height(o.el)}, moving toward the ${dir(o.hd)}</div></div>
+      <span class="${chipCls(o.lbl)}">${o.lbl}</span></button>`).join('');
+  return `<div class="head"><div class="big teal">${n.list.length}</div><div class="lead">${n.list.length === 1 ? 'satellite' : 'satellites'} up there right now</div>
+    ${mix ? `<div class="mix">${mix}</div>` : ''}
+    <div class="note">Faint ones need dark eyes. Give it 5 minutes away from lights. They glow teal on the globe.</div></div>
+    ${rows || `<div class="none">Nothing up there this minute. Check again in a few minutes.</div>`}`;
+}
+function refreshLists(){
+  if (ui.snap !== 'full') return;
+  const sc = $('#scroll'), top = sc.scrollTop;
+  sc.innerHTML = ui.tab === 'now' ? renderNow() : renderTonight();
+  sc.scrollTop = top;
+}
+$('#scroll').addEventListener('click', e => {
+  const r = e.target.closest('.row'); if (!r) return;
+  const [t, i] = r.dataset.ref.split(':');
+  select({ t, i: +i }, true);
+  setSnap('half');
+});
+function refresh(){ recolor(); renderDetail(); renderBar(); refreshLists(); }
+function refreshNow(){ renderBar(); if (ui.tab === 'now') refreshLists(); if (state.sel) renderDetail(); }
+setInterval(() => {
+  const n = $('[data-count]');
+  if (n){ const p = state.sel ? selInfo()?.p : nextBright(); if (p){ const u = until(p); n.textContent = u.txt; n.classList.toggle('now', !!u.now); } }
+  renderDetail(); renderBar();
+}, 1000);
 
 /* ---------- selection / picking ---------- */
-function select(sel, fly){
+function infoFor(t, i){
+  if (t === 'm') return state.sats[i];
+  const o = ((state.now && state.now.list) || []).find(x => x.t === 'a' && x.i === i)
+    || ((state.evening && state.evening.faint) || []).find(x => x.ai === i);
+  return o ? { name: o.name, kind: o.kind, year: o.year } : { name: 'Satellite', kind: 'act' };
+}
+function select(sel, flyThere){
+  if (sel) sel.info = infoFor(sel.t, sel.i);
   state.sel = sel;
   pathLine.visible = false;
-  if (sel && sel.t === 'm'){
-    state.worker.postMessage({ type: 'path', idx: sel.i });
-    if (fly){ const v = new THREE.Vector3().fromArray(mainCur, sel.i*3); flyTo(v, Math.max(1.9, Math.min(camera.position.length(), flyDist())), 2000); }
+  if (state.worker) state.worker.postMessage({ type: 'track', i: sel && sel.t === 'a' ? sel.i : -1 });
+  if (sel && state.worker){
+    state.worker.postMessage({ type: 'path', t: sel.t, idx: sel.i });
+    if (flyThere){
+      const go = () => { const p = posOf(sel.t, sel.i); if (p) flyTo(new THREE.Vector3(...p), Math.max(1.9, Math.min(camera.position.length(), flyDist())), 2000); };
+      posOf(sel.t, sel.i) ? go() : setTimeout(go, 700);
+    }
   }
-  recolor(); renderCard();
+  recolor(); renderDetail(); renderBar();
 }
-setInterval(() => { if (state.sel && state.sel.t === 'm' && state.worker) state.worker.postMessage({ type: 'path', idx: state.sel.i }); }, 60000);
+setInterval(() => { if (state.sel && state.worker) state.worker.postMessage({ type: 'path', t: state.sel.t, idx: state.sel.i }); }, 60000);
 
 const tmp = new THREE.Vector3();
 function inFront(p){
@@ -890,18 +1343,17 @@ renderer.domElement.addEventListener('pointerup', e => {
   if (!down) return; const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t; down = null;
   if (moved > 8 || dt > 450 || !mainCur) return;
   let best = null, bd = 30;
-  const test = (arr, n, t) => {
-    const v = new THREE.Vector3();
-    for (let i = 0; i < n; i++){
-      v.fromArray(arr, i*3); if (!v.x && !v.y && !v.z) continue;
-      const s = toScreen(v); if (s.z > 1) continue;
-      const d = Math.hypot(s.x - e.clientX, s.y - e.clientY);
-      if (d < bd && inFront(v)){ bd = d; best = { t, i }; }
-    }
+  const v = new THREE.Vector3();
+  const test = (x, y, z, ref) => {
+    v.set(x, y, z); if (!x && !y && !z) return;
+    const s = toScreen(v); if (s.z > 1) return;
+    const d = Math.hypot(s.x - e.clientX, s.y - e.clientY);
+    if (d < bd && inFront(v)){ bd = d; best = ref; }
   };
-  test(mainCur, state.sats.length, 'm');
-  if (!best && state.slOn && slHasData) test(slCur, state.slCount, 's');
-  if (best) select(best, false);
+  for (let i = 0; i < state.sats.length; i++) test(mainCur[i*3], mainCur[i*3+1], mainCur[i*3+2], { t: 'm', i });
+  trk.cur.forEach((p, i) => test(p[0], p[1], p[2], { t: 'a', i }));
+  if (best){ select(best, false); setSnap('half'); }
+  else if (ui.snap !== 'peek') setSnap('peek');
   else if (state.sel) select(null);
 });
 
@@ -911,42 +1363,44 @@ $('#slBtn').onclick = () => {
   state.slOn = !state.slOn;
   $('#slBtn').classList.toggle('on', state.slOn); $('#slBtn').setAttribute('aria-pressed', state.slOn);
   if (state.worker) state.worker.postMessage({ type: 'sl', on: state.slOn });
-  if (!state.slOn && state.sel && state.sel.t === 's') select(null);
 };
 
 /* ---------- labels ---------- */
 const lblIss = $('#lblIss'), lblSel = $('#lblSel'), lblYou = $('#lblYou');
 function placeLabel(el, p, show, dy = -22){
   if (!show || !inFront(p)){ el.classList.remove('on'); return; }
-  const s = toScreen(p);
-  el.style.transform = `translate(${s.x}px, ${s.y + dy}px) translate(-50%, -50%)`;
+  const s = toScreen(p), hw = el.offsetWidth/2 + 10, x = Math.max(hw, Math.min(window.innerWidth - hw, s.x));
+  el.style.transform = `translate(${x.toFixed(1)}px, ${(s.y + dy).toFixed(1)}px) translate(-50%, -50%)`;
   el.classList.add('on');
 }
 
 /* ---------- reveal ---------- */
 let revealed = false, texturesDone = false;
-manager.onLoad = () => { texturesDone = true; maybeReveal(); };
-manager.onError = () => { texturesDone = true; maybeReveal(); };
 function maybeReveal(force){
   if (revealed || !(force || (texturesDone && state.sats.length))) return;
   revealed = true;
   document.body.classList.add('ready'); $('#stage').classList.add('ready');
   $('#loader').classList.add('hide');
-  setTimeout(() => $('#card').classList.add('show'), 500);
+  sheetLayout();
+  setTimeout(() => setSnap('peek'), 400);
   if (pendingFly && state.obs){ pendingFly = false; flyTo(ll2v(state.obs.lat, state.obs.lon), flyDist(), 3000); }
 }
 setTimeout(() => { if (!revealed && texturesDone) maybeReveal(true); }, 12000);
 
 /* ---------- loop ---------- */
 let raf = 0, lastSun = 0;
+controls.addEventListener('start', () => { dragging = true; controls.autoRotate = false; });
+controls.addEventListener('end', () => { dragging = false; idleSince = performance.now(); });
+controls.addEventListener('change', () => { idleSince = performance.now(); });
 function frame(now){
   raf = requestAnimationFrame(frame);
-  if (now - lastSun > 1000){ sun.value.copy(sunVec(Date.now())); lastSun = now; }
+  if (now - lastSun > 1000){ sun.value.copy(sunVec(nowMs())); lastSun = now; }
   if (mainCur && mainT0){
     const k = Math.min(1, (now - mainT0)/500);
     for (let i = 0; i < mainCur.length; i++) mainCur[i] = mainPrev[i] + (mainNext[i] - mainPrev[i])*k;
     mainGeo.attributes.position.needsUpdate = true;
   }
+  stepTrk(now); stepNow();
   if (slPts){
     slAlpha += ((state.slOn && slHasData ? 0.55 : 0) - slAlpha)*0.08;
     slPts.material.uniforms.alpha.value = slAlpha; slPts.visible = slAlpha > 0.01;
@@ -957,30 +1411,28 @@ function frame(now){
     }
   }
   const dist = camera.position.length();
-  controls.rotateSpeed = 0.12 + 0.32*Math.min(1, (dist - 1)/(baseDist - 1));
+  controls.rotateSpeed = 0.06 + 0.36*Math.min(1, (dist - 1)/(baseDist - 1));
+  controls.zoomSpeed = 0.5 + 0.5*Math.min(1, (dist - 1)/(baseDist - 1));
   stepFly(now);
   if (!fly) controls.update();
+  stepPatch(now);
 
-  // ISS
   const issI = state.sats.findIndex(s => s.kind === 'iss');
   if (issI >= 0 && mainT0){
     issRing.position.fromArray(mainCur, issI*3); issRing.visible = true;
     const sc = 0.04 + 0.006*Math.sin(now/500); issRing.scale.set(sc, sc, 1);
     placeLabel(lblIss, issRing.position, !(state.sel && state.sel.t === 'm' && state.sel.i === issI));
   }
-  // selection
-  if (state.sel && (mainT0 || slT0)){
-    const arr = state.sel.t === 'm' ? mainCur : slCur;
-    selRing.position.fromArray(arr, state.sel.i*3); selRing.visible = true;
+  const sp = state.sel && posOf(state.sel.t, state.sel.i);
+  if (sp){
+    selRing.position.set(sp[0], sp[1], sp[2]); selRing.visible = true;
     const sc = 0.055 + 0.01*Math.sin(now/350); selRing.scale.set(sc, sc, 1);
-    lblSel.textContent = state.sel.t === 'm' ? friendly(state.sats[state.sel.i]) : 'Starlink';
+    lblSel.textContent = friendly(state.sel.t === 'm' ? state.sats[state.sel.i] : state.sel.info);
     placeLabel(lblSel, selRing.position, true, -26);
   } else { selRing.visible = false; lblSel.classList.remove('on'); }
   if (pathLine.visible){ pathFade = Math.min(1, pathFade + 0.03); pathLine.material.opacity = pathFade; }
-  // home
   if (home.visible){
-    const s = Math.max(0.006, dist*0.0068);
-    home.scale.setScalar(s);
+    home.scale.setScalar(Math.max(0.0012, (dist - 1)*0.012 + 0.0006));
     const k = (now % 2200)/2200;
     pulse.scale.setScalar(1 + k*2.2); pulse.material.opacity = 0.8*(1 - k);
     placeLabel(lblYou, home.position, true, -24);
@@ -992,11 +1444,12 @@ document.addEventListener('visibilitychange', () => {
   else if (!raf){ state.worker && state.worker.postMessage({ type: 'pause', on: false }); raf = requestAnimationFrame(frame); }
 });
 window.addEventListener('resize', layout);
-controls.addEventListener('start', () => { controls.autoRotate = false; });
+window.__overhead = { state, texInfo, ui, camera, controls, setSnap };
 
 layout();
-renderCard();
+refresh();
 raf = requestAnimationFrame(frame);
+loadEarth();
 loadData();
 askLocation();
 </script>
