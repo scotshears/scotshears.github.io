@@ -746,8 +746,8 @@ function curated(){
   return keep.sort((a,b) => a.start - b.start);
 }
 const mins = p => Math.max(1, Math.round((p.end - p.start)/60000));
-const lookAz = p => p.peakEl >= 70 ? p.startAz : p.peakAz;
-const lookWords = p => p.peakEl >= 70 ? `Look ${dir(p.startAz)}, then straight up` : `Look ${dir(p.peakAz)}, ${height(p.peakEl)}`;
+const lookAz = p => p.peakEl >= 55 ? p.startAz : p.peakAz;
+const lookWords = p => p.peakEl >= 70 ? `Look ${dir(p.startAz)}, then straight up` : p.peakEl >= 55 ? `Look ${dir(p.startAz)}, then high up` : `Look ${dir(p.peakAz)}, ${height(p.peakEl)}`;
 function pathWords(p){ return `Appears in the ${dir(p.startAz)}, ${climb(p.peakEl)}, and fades in the ${dir(p.endAz)}. Visible for about ${mins(p)} minute${mins(p) > 1 ? 's' : ''}.`; }
 function satForPass(p){ return state.sats[p.idx]; }
 function nameForPass(p){ return friendly(satForPass(p)); }
