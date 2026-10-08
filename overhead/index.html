@@ -207,27 +207,39 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-a
 <div id="loader"><div class="ld"><div class="orbit"><i></i></div><h1>Over<em>head</em></h1><p id="ldMsg">Finding what's above you</p></div></div>
 
 <script id="workerSrc" type="text/js-worker">
-importScripts('https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js');
+importScripts('https://cdn.jsdelivr.net/npm/satellite.js@6.0.2/dist/satellite.min.js');
 const S = self.satellite;
 const RE = 6371, D2R = Math.PI/180, R2D = 180/Math.PI, DARK = Math.sin(-6*D2R);
 let main = [], sl = [], trains = [], obs = null, slOn = false, paused = false, passTimer = null;
 let OFF = 0; const nowMs = () => Date.now() + OFF;
 
+// CelesTrak OMM as CSV (same fields as FORMAT=json, a third of the size). Handles 6-digit catalog numbers, which TLE cannot.
+const OMM_TEXT = new Set(['OBJECT_NAME','OBJECT_ID','EPOCH','CLASSIFICATION_TYPE']);
+function csvRow(line){
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++){
+    const ch = line[i];
+    if (q){ if (ch === '"'){ if (line[i+1] === '"'){ cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true; else if (ch === ','){ out.push(cur); cur = ''; } else cur += ch;
+  }
+  out.push(cur); return out;
+}
 function parse(txt){
-  const L = (txt||'').split(/\r?\n/), out = [];
-  for (let i = 0; i < L.length - 1; i++){
-    const a = L[i], b = L[i+1];
-    if (a.startsWith('1 ') && b.startsWith('2 ')){
-      const prev = i > 0 ? L[i-1].trim() : '';
-      const name = (prev && !prev.startsWith('1 ') && !prev.startsWith('2 ')) ? prev : '';
-      const rec = S.twoline2satrec(a, b);
-      if (rec && !rec.error) out.push({ name, l1: a, l2: b, rec, id: a.substring(2,7).trim() });
-      i++;
-    }
+  const L = (txt || '').split(/\r?\n/).filter(x => x.trim()), out = [];
+  if (!L.length || !L[0].startsWith('OBJECT_NAME')) return out;
+  const H = csvRow(L[0]);
+  for (let i = 1; i < L.length; i++){
+    const v = csvRow(L[i]), o = {};
+    H.forEach((h, k) => { o[h] = OMM_TEXT.has(h) ? v[k] : Number(v[k]); });
+    if (!o.NORAD_CAT_ID || !o.EPOCH) continue;
+    let rec; try { rec = S.json2satrec(o); } catch (e) { continue; }
+    if (!rec || rec.error) continue;
+    const oid = o.OBJECT_ID || '', yr = parseInt(oid.slice(0, 4), 10);
+    out.push({ name: (o.OBJECT_NAME || '').trim(), id: String(o.NORAD_CAT_ID), oid, lk: oid.slice(0, 8), year: isNaN(yr) ? null : yr,
+      mm: o.MEAN_MOTION, epoch: Date.parse(o.EPOCH + 'Z'), rec });
   }
   return out;
 }
-function yearOf(l1){ const yy = parseInt(l1.substring(9,11),10); return isNaN(yy) ? null : (yy < 57 ? 2000+yy : 1900+yy); }
 function kindOf(s){
   if (s.id === '25544') return 'iss';
   if (/TIANHE/.test(s.name)) return 'css';
@@ -281,18 +293,44 @@ function findPasses(rec, t0, t1, minPeak){
   }
   return res;
 }
-function findTrains(list){
-  const yy = String(new Date(nowMs()).getUTCFullYear() % 100).padStart(2,'0'), groups = {};
-  for (const s of list){ const k = s.l1.substring(9,14); if (k.startsWith(yy)) (groups[k] = groups[k] || []).push(s); }
+// how many members of a launch are bunched within 2500 km of the middle one at time t
+function bunched(tr, t){
+  const d = new Date(t), P = [];
+  for (const s of tr.members){ const pv = S.propagate(s.rec, d); if (pv && pv.position) P.push(pv.position); }
+  if (P.length < 10) return 0;
+  const cx = P.reduce((a, p) => a + p.x, 0)/P.length, cy = P.reduce((a, p) => a + p.y, 0)/P.length, cz = P.reduce((a, p) => a + p.z, 0)/P.length;
+  let mid = P[0], best = Infinity;
+  for (const p of P){ const dd = Math.hypot(p.x - cx, p.y - cy, p.z - cz); if (dd < best){ best = dd; mid = p; } }
+  return P.filter(p => Math.hypot(p.x - mid.x, p.y - mid.y, p.z - mid.z) <= 2500).length;
+}
+async function launchDate(lk){
+  const url = `https://celestrak.org/satcat/records.php?INTDES=${lk}&FORMAT=json`;
+  let cache = null;
+  try { cache = await caches.open('overhead-satcat-v1'); const hit = await cache.match(url); if (hit) return (await hit.json())[0]?.LAUNCH_DATE || null; } catch (e) {}
+  try {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch(url, { signal: ctl.signal }); clearTimeout(to);
+    const t = await r.text(); const j = JSON.parse(t);
+    if (r.ok && Array.isArray(j) && j.length){ try { if (cache) await cache.put(url, new Response(t)); } catch (e) {} return j[0].LAUNCH_DATE || null; }
+  } catch (e) {}
+  return null;
+}
+// fresh Starlink batches: same launch, at least 10 satellites, launched in the last ~6 weeks (or still low if the date is unknown)
+async function findTrains(list){
+  const yr = new Date(nowMs()).getUTCFullYear(), groups = {};
+  for (const s of list){ if (s.year >= yr - 1 && s.lk) (groups[s.lk] = groups[s.lk] || []).push(s); }
+  const cands = Object.keys(groups).filter(k => groups[k].length >= 10).sort().reverse().slice(0, 4);
   const out = [];
-  for (const k in groups){
-    const g = groups[k]; if (g.length < 10) continue;
-    const mm = g.map(s => parseFloat(s.l2.substring(52,63))).sort((a,b) => a-b);
-    if (mm[mm.length >> 1] < 15.45) continue; // already raised to working height: no longer a train
-    out.push({ k, num: parseInt(k.substring(2),10), members: g });
+  for (const k of cands){
+    const g = groups[k], mm = g.map(s => s.mm).sort((a,b) => a-b), low = mm[mm.length >> 1] >= 15.45;
+    const ld = await launchDate(k), age = ld ? (nowMs() - Date.parse(ld + 'T00:00:00Z'))/86400000 : null;
+    if (age != null ? (age < -1 || age > 45) : !low) continue;
+    const t = nowMs(), tr = { members: g };
+    if (Math.max(bunched(tr, t), bunched(tr, t + 864e5), bunched(tr, t + 1728e5)) < 10) continue; // already spread out: not a train any more
+    out.push({ k, members: g, launched: ld });
+    if (out.length >= 3) break;
   }
-  out.sort((a,b) => b.num - a.num);
-  return out.slice(0,3);
+  return out;
 }
 function toThree(p, g, arr, o){
   const c = Math.cos(g), s = Math.sin(g);
@@ -365,7 +403,10 @@ function computePasses(){
     for (const p of findPasses(s.rec, t0, t1, minPeak)) out.push(Object.assign(p, { idx: i, kind: s.kind }));
   });
   trains.forEach(tr => {
-    for (const p of findPasses(tr.rep.rec, t0, t1, 15)) out.push(Object.assign(p, { idx: tr.repIdx, kind: 'train', train: tr.ti }));
+    for (const p of findPasses(tr.rep.rec, t0, t1, 15)){
+      const n = bunched(tr, p.peakT);
+      if (n >= 10) out.push(Object.assign(p, { idx: tr.repIdx, kind: 'train', train: tr.ti, bunch: n }));
+    }
   });
   out.sort((a,b) => a.start - b.start);
   postMessage({ type: 'passes', passes: out.filter(p => p.end > now), at: now });
@@ -473,31 +514,50 @@ function tickSl(){
 let act = [], cand = [], nowTimer = null;
 onmessage = e => {
   const m = e.data;
-  if (m.type === 'init'){
+  if (m.type === 'init') init(m);
+  else if (m.type === 'obs' && !main.length) pendingObs = m;
+  else handle(m);
+};
+let pendingObs = null;
+async function init(m){
     OFF = m.off || 0;
     const seen = new Set();
     for (const s of parse(m.visual).concat(parse(m.stations).filter(s => s.id === '25544' || /TIANHE/.test(s.name)))){
       if (seen.has(s.id)) continue; seen.add(s.id);
-      s.kind = kindOf(s); s.year = yearOf(s.l1); main.push(s);
+      s.kind = kindOf(s); main.push(s);
     }
-    const all = parse(m.active).filter(s => !seen.has(s.id) && (seen.add(s.id), true));
-    all.forEach(s => { s.kind = /^STARLINK/.test(s.name) ? 'star' : 'act'; s.year = yearOf(s.l1); });
+    // active + last 30 days (new launches show up there first); newest element set wins
+    const byId = new Map();
+    for (const s of parse(m.active).concat(parse(m.recent))){
+      if (seen.has(s.id)) continue;
+      const o = byId.get(s.id); if (!o || s.epoch > o.epoch) byId.set(s.id, s);
+    }
+    const all = [...byId.values()];
+    all.forEach(s => { s.kind = /^STARLINK/.test(s.name) ? 'star' : 'act'; });
     sl = all.filter(s => s.kind === 'star');
-    trains = findTrains(sl).map((tr, ti) => {
+    trains = (await findTrains(sl)).map((tr, ti) => {
       const base = main.length;
       tr.members.forEach(s => { s.kind = 'train'; s.train = ti; main.push(s); });
-      const mid = tr.members.length >> 1;
-      return { ti, rep: tr.members[mid], repIdx: base + mid, size: tr.members.length };
+      const P = tr.members.map(s => S.propagate(s.rec, new Date(nowMs()))?.position).filter(Boolean);
+      const cx = P.reduce((a, p) => a + p.x, 0)/P.length, cy = P.reduce((a, p) => a + p.y, 0)/P.length, cz = P.reduce((a, p) => a + p.z, 0)/P.length;
+      let mid = 0, best = Infinity;
+      tr.members.forEach((s, k) => { const pv = S.propagate(s.rec, new Date(nowMs())); if (!pv || !pv.position) return;
+        const dd = Math.hypot(pv.position.x - cx, pv.position.y - cy, pv.position.z - cz); if (dd < best){ best = dd; mid = k; } });
+      return { ti, members: tr.members, rep: tr.members[mid], repIdx: base + mid, size: tr.members.length, launched: tr.launched };
     });
     act = all.filter(s => s.kind !== 'train');
     cand = []; act.forEach((s, i) => { if (apoOf(s.rec) < 1000) cand.push(i); });
     postMessage({ type: 'ready', sats: main.map(s => ({ id: s.id, name: s.name, kind: s.kind, year: s.year, train: s.train ?? -1 })),
       slCount: sl.length, actCount: act.length, candCount: cand.length,
-      trains: trains.map(t => ({ ti: t.ti, repIdx: t.repIdx, size: t.size })) });
+      maxId: Math.max(...main.concat(act).map(s => +s.id)),
+      trains: trains.map(t => ({ ti: t.ti, repIdx: t.repIdx, size: t.size, launched: t.launched })) });
     tickMain();
     setInterval(tickMain, 500);
     setInterval(tickSl, 1000);
-  } else if (m.type === 'obs'){
+    if (pendingObs){ const o = pendingObs; pendingObs = null; handle(o); }
+}
+function handle(m){
+  if (m.type === 'obs'){
     const lat = m.lat*D2R, lon = m.lon*D2R;
     obs = { gd: { latitude: lat, longitude: lon, height: (m.alt || 0)/1000 },
       up: [Math.cos(lat)*Math.cos(lon), Math.cos(lat)*Math.sin(lon), Math.sin(lat)] };
@@ -904,7 +964,7 @@ function stepFly(now){
 camera.position.copy(ll2v(18, -40, 1).multiplyScalar(4));
 
 /* ---------- worker ---------- */
-function startWorker(tles){
+function startWorker(omm){
   const w = new Worker(URL.createObjectURL(new Blob([$('#workerSrc').textContent], { type: 'text/javascript' })));
   state.worker = w;
   w.onmessage = e => {
@@ -913,6 +973,7 @@ function startWorker(tles){
       state.sats = m.sats; state.slCount = m.slCount; state.trains = m.trains;
       buildMain(m.sats.length); buildSl(m.slCount);
       if (!m.slCount) $('#slBtn').style.display = 'none';
+      console.info('overhead catalog', JSON.stringify({ sats: m.actCount + m.sats.length, maxId: m.maxId, trains: m.trains }));
       if (state.obs) w.postMessage({ type: 'obs', ...state.obs });
       maybeReveal();
     } else if (m.type === 'pos'){
@@ -940,18 +1001,18 @@ function startWorker(tles){
       if (state.sel && state.sel.t === m.t && state.sel.i === m.idx) setPath(m.pts);
     }
   };
-  w.postMessage({ type: 'init', ...tles, off: OFF });
+  w.postMessage({ type: "init", ...omm, off: OFF });
 }
 
 /* ---------- data (CelesTrak allows one download per group every 2 hours, so keep a copy) ---------- */
-async function getTLE(group, alt){
-  const url = alt || `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`;
+async function getOMM(group, alt){
+  const url = alt || `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=csv`;
   let cache = null, hit = null, age = Infinity;
-  try { cache = await caches.open('overhead-tle-v1'); hit = await cache.match(url); if (hit) age = Date.now() - Number(hit.headers.get('x-saved') || 0); } catch (e) {}
+  try { cache = await caches.open('overhead-omm-v1'); hit = await cache.match(url); if (hit) age = Date.now() - Number(hit.headers.get('x-saved') || 0); } catch (e) {}
   if (hit && age < 2*3600e3) return hit.text();
   try {
     const r = await fetch(url, { cache: 'no-store' }); const t = await r.text();
-    if (r.ok && /^1 /m.test(t)){
+    if (r.ok && t.startsWith('OBJECT_NAME') && t.indexOf('\n') > 0){
       try { if (cache) await cache.put(url, new Response(t, { headers: { 'x-saved': String(Date.now()), 'content-type': 'text/plain' } })); } catch (e) {}
       return t;
     }
@@ -959,12 +1020,12 @@ async function getTLE(group, alt){
   return hit ? hit.text() : '';
 }
 async function loadData(){
-  const [visual, stations, active0] = await Promise.all([getTLE('visual'), getTLE('stations'), getTLE('active')]);
+  const [visual, stations, active0, recent] = await Promise.all([getOMM('visual'), getOMM('stations'), getOMM('active'), getOMM('last-30-days')]);
   let active = active0;
-  if (!active) active = await getTLE('starlink');
-  if (!active) active = await getTLE('starlink', 'https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=starlink&FORMAT=tle');
+  if (!active) active = await getOMM('starlink');
+  if (!active) active = await getOMM('starlink', 'https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=starlink&FORMAT=csv');
   if (!visual && !stations){ state.dataError = true; refresh(); maybeReveal(true); return; }
-  startWorker({ visual, stations, active });
+  startWorker({ visual, stations, active, recent });
 }
 
 /* ---------- location ---------- */
@@ -995,7 +1056,7 @@ function friendly(s){
   if (s.kind === 'iss') return 'International Space Station';
   if (s.kind === 'css') return 'Chinese Space Station';
   if (s.kind === 'hst') return 'Hubble Space Telescope';
-  if (s.kind === 'train') return 'Starlink train';
+  if (s.kind === 'train') return 'Starlink train (string of lights)';
   if (s.kind === 'rb') return 'Old rocket stage';
   const n = (s.name || '').replace(/\(.*?\)|\[.*?\]/g, '').replace(/\bDEB\b/, '').replace(/-(?=\d)/g, ' ').trim();
   return tcase(n) || 'Satellite';
@@ -1445,7 +1506,7 @@ document.addEventListener('visibilitychange', () => {
   else if (!raf){ state.worker && state.worker.postMessage({ type: 'pause', on: false }); raf = requestAnimationFrame(frame); }
 });
 window.addEventListener('resize', layout);
-window.__overhead = { state, texInfo, ui, camera, controls, setSnap };
+window.__overhead = { state, texInfo, ui, camera, controls, setSnap, select };
 
 layout();
 refresh();
