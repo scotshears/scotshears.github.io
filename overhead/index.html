@@ -146,6 +146,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-a
 .row.live .t{color:var(--gold2)}
 .row .dot{width:10px;height:10px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal)}
 .row .dot.dim{opacity:.5;box-shadow:none}
+.row.gone .n,.row.gone .chip{opacity:.45}
+.row.gone .l{color:var(--gold2)}
+.row.soon .t{color:var(--gold2)}
+.look.gone{color:var(--gold2)}
 .none{color:var(--muted);padding:18px 10px;font-size:16px;line-height:1.5}
 
 /* labels */
@@ -376,38 +380,44 @@ function phaseF(p, sd, g){
 // Starlink brightness at 1000 km, half lit: first batches were brighter, later ones carry visors / dark film
 const starStd = s => (s.year || 2025) <= 2020 ? 5.3 : (s.year <= 2022 ? 5.9 : 6.4);
 const NAKED = 4.0; // what a dark-adapted eye can pick out from a back yard (2026-10-18: now applied to every satellite via real McCants magnitudes)
+// (2026-10-20) split out of grade() so the "right now" list can keep a satellite it already named while it is only a little dimmer
+// (2026-10-18) everything gets a real magnitude: McCants standard mag, distance and sun angle.
+// Before this, every "visual" satellite was called Bright, so far-off dim ones (ISIS 1 at 3,500 km) were listed.
+function magOf(s, rng, p, sd, g){
+  if (s.kind === 'iss') return -2.0;
+  const F = phaseF(p, sd, g); if (F <= 0.002) return null;
+  const std = (s.kind === 'train' || s.kind === 'star') ? starStd(s) : s.kind === 'act' ? 6.0 : (STDMAG[s.id] ?? (s.kind === 'css' ? 0.0 : s.kind === 'rb' ? 5.0 : 5.5));
+  return std + 5*Math.log10(rng/1000) - 2.5*Math.log10(F/0.3183);
+}
+function lblOf(s, mag){
+  if (s.kind === 'iss') return 'Very bright';
+  if (mag == null) return null;
+  if (s.kind === 'train' || s.kind === 'star') return mag <= NAKED ? 'Faint' : null;
+  if (s.kind === 'act') return mag <= NAKED ? 'Very faint' : null;
+  return mag <= 1.0 ? 'Very bright' : mag <= 2.5 ? 'Bright' : mag <= NAKED ? 'Faint' : null;
+}
 function grade(s, el, rng, p, sd, g){
   if (s.kind === 'iss') return 'Very bright';
-  if (s.kind === 'train' || s.kind === 'star'){
-    if (rng > 1000) return null;
-    const F = phaseF(p, sd, g); if (F <= 0.002) return null;
-    return starStd(s) + 5*Math.log10(rng/1000) - 2.5*Math.log10(F/0.3183) <= NAKED ? 'Faint' : null;
-  }
-  if (s.kind === 'act'){
-    // most other payloads are small; count one only when it is close, high and lit from behind you
-    if (rng > 900 || el < 30) return null;
-    const F = phaseF(p, sd, g); if (F <= 0.002) return null;
-    return 6.0 + 5*Math.log10(rng/1000) - 2.5*Math.log10(F/0.3183) <= NAKED ? 'Very faint' : null;
-  }
-  // (2026-10-18) everything else gets a real magnitude: McCants standard mag, distance and sun angle.
-  // Before this, every "visual" satellite was called Bright, so far-off dim ones (ISIS 1 at 3,500 km) were listed.
-  const std = STDMAG[s.id] ?? (s.kind === 'css' ? 0.0 : s.kind === 'rb' ? 5.0 : 5.5);
-  const F = phaseF(p, sd, g); if (F <= 0.002) return null;
-  const mag = std + 5*Math.log10(rng/1000) - 2.5*Math.log10(F/0.3183);
-  return mag <= 1.0 ? 'Very bright' : mag <= 2.5 ? 'Bright' : mag <= NAKED ? 'Faint' : null;
+  if ((s.kind === 'train' || s.kind === 'star') && rng > 1000) return null;
+  // most other payloads are small; count one only when it is close, high and lit from behind you
+  if (s.kind === 'act' && (rng > 900 || el < 30)) return null;
+  return lblOf(s, magOf(s, rng, p, sd, g));
 }
 function nextDark(t){
   for (let u = t; u < t + 26*3600000; u += 120000) if (obsSunSin(sunDir(u), S.gstime(new Date(u))) < DARK) return u;
   return null;
 }
 // (2026-10-18) true when a person could see this pass by eye at some moment (sunlit, dark sky, bright enough)
+// (2026-10-20) returns the best brightness word for the pass, so the list chip matches what "right now" will say
 function seenPass(s, ps){
+  let best = null;
   for (let u = ps.start; u <= ps.end; u += 20000){
     const q = sample(s.rec, u); if (!q || q.el < 20) continue;
     const sd = sunDir(u); if (!lit(q.p, sd) || obsSunSin(sd, q.g) >= DARK) continue;
-    if (grade(s, q.el, q.rng, q.p, sd, q.g)) return true;
+    const l = grade(s, q.el, q.rng, q.p, sd, q.g);
+    if (l && (!best || RANK[l] < RANK[best])) best = l;
   }
-  return false;
+  return best;
 }
 function computePasses(){
   if (!obs) return;
@@ -417,8 +427,9 @@ function computePasses(){
     const big = s.kind === 'iss' || s.kind === 'css';
     const minPeak = big ? 10 : 40;   // (2026-10-18) others only when they climb well up the sky, where you can really pick them out
     for (const p of findPasses(s.rec, t0, t1, minPeak)){
-      if (!big && !seenPass(s, p)) continue;   // too dim to see by eye anywhere on this pass
-      out.push(Object.assign(p, { idx: i, kind: s.kind }));
+      const lbl = big ? null : seenPass(s, p);
+      if (!big && !lbl) continue;   // too dim to see by eye anywhere on this pass
+      out.push(Object.assign(p, { idx: i, kind: s.kind, lbl }));
     }
   });
   trains.forEach(tr => {
@@ -446,28 +457,100 @@ function heading(rec, t, la){
   return ((Math.atan2(p2[0] - p1[0], p2[1] - p1[1])*R2D) + 360) % 360;
 }
 const RANK = { 'Very bright': 0, 'Bright': 1, 'Faint': 2, 'Very faint': 3 };
+// (2026-10-20) Scot: "you'd name it, then it would flash and go away while it was still right over us."
+// Cause: every 3 s the list was rebuilt from scratch with hard cutoffs (30 degrees up, magnitude 4.0), so a satellite
+// sitting right at a cutoff blinked in and out, and one that was named at 31 degrees vanished at 29 while still high.
+// Now a satellite has to earn its way on (same rule as before), but once named it stays until it really goes:
+// down to 10 degrees, into Earth's shadow, or a full magnitude dimmer than the cutoff. When it goes, the row lingers
+// for a moment and says why. "Coming up" (lookAhead) warns before a satellite reaches the naming rule.
+const SHOW_EL = k => (k === 'iss' || k === 'css') ? 15 : 30, KEEP_EL = 10, LINGER = 45000, SOON_MIN = 10;
+const shown = new Map(); let lastTick = 0, soon = [], soonAt = 0;
 function nowCheck(){
   if (!obs || paused) return;
-  const t = nowMs(), d = new Date(t), g = S.gstime(d), sd = sunDir(t);
-  if (obsSunSin(sd, g) >= DARK){ nowAct = []; postMessage({ type: 'now', dark: false, darkAt: nextDark(t), list: [] }); return; }
+  const t = nowMs(), d = new Date(t), g = S.gstime(d), sd = sunDir(t), tp0 = performance.now();
+  if (t - lastTick > 60000) shown.clear(); lastTick = t;   // phone was asleep: start clean
+  if (obsSunSin(sd, g) >= DARK){ nowAct = []; shown.clear(); soon = []; postMessage({ type: 'now', dark: false, darkAt: nextDark(t), list: [], soon: [] }); return; }
   const c = Math.cos(g), sn = Math.sin(g);
   const ux = obs.up[0]*c - obs.up[1]*sn, uy = obs.up[0]*sn + obs.up[1]*c, uz = obs.up[2];
-  const out = [];
+  const out = [], near = [], touched = new Set();
   const check = (s, t_, i) => {
     const pv = S.propagate(s.rec, d); if (!pv || !pv.position) return;
     const p = pv.position, r = Math.hypot(p.x, p.y, p.z);
-    if (Math.acos(Math.max(-1, Math.min(1, (p.x*ux + p.y*uy + p.z*uz)/r)))*R2D > coneOf(s.rec, 15)) return;
+    const ang = Math.acos(Math.max(-1, Math.min(1, (p.x*ux + p.y*uy + p.z*uz)/r)))*R2D;
+    const cone = coneOf(s.rec, KEEP_EL);
+    if (ang - s.rec._rate*SOON_MIN > cone) return;   // cannot be above 10 degrees within the next 10 minutes
+    near.push({ s, t_, i });
+    if (ang > cone) return;
     const la = S.ecfToLookAngles(obs.gd, S.eciToEcf(p, g)), el = la.elevation*R2D;
-    if (el < (s.kind === 'iss' || s.kind === 'css' ? 15 : 30) || !lit(p, sd)) return;   // (2026-10-18) others only when well up the sky
-    const lbl = grade(s, el, la.rangeSat, p, sd, g); if (!lbl) return;
-    out.push({ t: t_, i, name: s.name, kind: s.kind, year: s.year, train: s.train ?? -1, el, az: ((la.azimuth*R2D) + 360) % 360,
-      rng: la.rangeSat, lbl, hd: heading(s.rec, t, la) });
+    const key = t_ + i, was = shown.get(key);
+    if (el < KEEP_EL) return;   // below 10 degrees: handled in the sweep below
+    const rng = la.rangeSat, isLit = lit(p, sd), mag = isLit ? magOf(s, rng, p, sd, g) : null;
+    let lbl = isLit ? grade(s, el, rng, p, sd, g) : null;
+    if (!was){
+      if (!lbl || el < SHOW_EL(s.kind)) return;   // (2026-10-18) has to be bright enough and well up the sky to get named
+      shown.set(key, { since: t, lbl, peakEl: el, left: null, leftAt: 0, last: null });
+    }
+    const w = shown.get(key);
+    touched.add(key);
+    let left = null;
+    if (!isLit) left = 'shadow';
+    else if (mag != null && mag > NAKED + 1.0) left = 'faded';
+    if (left){ if (!w.left){ w.left = left; w.leftAt = t; } }
+    else { w.left = null; w.leftAt = 0; if (lbl) w.lbl = lbl; }
+    if (w.left && t - w.leftAt > LINGER){ shown.delete(key); return; }
+    w.peakEl = Math.max(w.peakEl, el);
+    const row = { t: t_, i, name: s.name, kind: s.kind, year: s.year, train: s.train ?? -1, el, az: ((la.azimuth*R2D) + 360) % 360,
+      rng, lbl: w.lbl, hd: heading(s.rec, t, la), since: w.since, peakEl: w.peakEl, left: w.left, mag: mag == null ? null : Math.round(mag*10)/10,
+      dim: !w.left && mag != null && mag > NAKED };
+    w.last = row; out.push(row);
   };
   main.forEach((s, i) => check(s, 'm', i));
   cand.forEach(i => check(act[i], 'a', i));
-  out.sort((a,b) => (RANK[a.lbl] - RANK[b.lbl]) || (b.el - a.el));
-  nowAct = out.filter(o => o.t === 'a').map(o => o.i);
-  postMessage({ type: 'now', dark: true, list: out, at: t });
+  // named satellites that dropped below 10 degrees: say so for a moment, then let them go
+  for (const [key, w] of shown){
+    if (touched.has(key) || !w.last) continue;
+    if (!w.left){ w.left = 'set'; w.leftAt = t; }
+    if (t - w.leftAt > LINGER || w.left !== 'set'){ shown.delete(key); continue; }
+    out.push(Object.assign({}, w.last, { left: 'set', dim: false }));
+  }
+  // steady order: brightest group first, then the one named first; the ones leaving go last
+  out.sort((a,b) => ((a.left ? 1 : 0) - (b.left ? 1 : 0)) || (RANK[a.lbl] - RANK[b.lbl]) || (a.since - b.since));
+  if (t - soonAt >= 30000 || soon.some(o => o.start <= t - 90000 && !shown.has(o.t + o.i))){ soon = lookAhead(t, near); soonAt = t; }
+  else soon = soon.filter(o => !shown.has(o.t + o.i));
+  nowAct = [...new Set(out.filter(o => o.t === 'a').map(o => o.i).concat(soon.filter(o => o.t === 'a').map(o => o.i)))];
+  postMessage({ type: 'now', dark: true, list: out, soon, at: t, ms: Math.round(performance.now() - tp0) });
+}
+// (2026-10-20) heads-up: who will get named in the next 10 minutes, where it appears, and how high it climbs.
+// Only satellites that are already close (near, from nowCheck) are scanned, 20 s steps, skipping ahead while they are below 10 degrees.
+function lookAhead(t, near){
+  const out = [], HOR = t + SOON_MIN*60000, STEP = 20000;
+  for (const { s, t_, i } of near){
+    if (s.kind === 'train' || shown.has(t_ + i)) continue;
+    let u = t + STEP, vis = null, show = null, pk = null, last = null, lbl = null, above = false;
+    while (u <= t + 30*60000){
+      const q = sample(s.rec, u); if (!q) break;
+      if (q.el < KEEP_EL){
+        if (above) break;                       // came back down without ever getting named
+        if (u > HOR) break;                     // not up within the heads-up window
+        u += Math.max(1, skipMin(s.rec, q.p, q.g, KEEP_EL))*60000; continue;
+      }
+      if (!above){ above = true; if (u > HOR) break; }
+      const sd = sunDir(u), ok = lit(q.p, sd) && obsSunSin(sd, q.g) < DARK;
+      if (ok){
+        const mag = magOf(s, q.rng, q.p, sd, q.g), g0 = grade(s, q.el, q.rng, q.p, sd, q.g);
+        if (!vis && lblOf(s, mag)) vis = q;     // first moment a person could pick it out, even low
+        if (g0 && q.el >= SHOW_EL(s.kind)){ if (!show){ show = q; lbl = g0; } if (!pk || q.el > pk.el) pk = q; last = q; }
+        else if (show){ if (mag != null && mag <= NAKED + 1.0) last = q; else break; }   // still on the list while only a little dimmer, same rule as nowCheck
+      } else if (show) break;                   // into Earth's shadow
+      u += STEP;
+    }
+    if (!show || show.t > HOR + 5*60000 || last.t - show.t < 40000) continue;   // skip ones that would only blink for a moment
+    const first = vis && vis.t <= show.t ? vis : show;
+    out.push({ t: t_, i, name: s.name, kind: s.kind, year: s.year, train: s.train ?? -1, start: first.t, startAz: first.az, startEl: first.el,
+      showT: show.t, peakT: pk.t, peakEl: pk.el, peakAz: pk.az, lbl, rising: first.t <= t + STEP });
+  }
+  out.sort((a,b) => a.start - b.start);
+  return out.slice(0, 5);
 }
 
 /* ---- tonight: distinct sunlit passes over 20 degrees, dark sky until 10 PM ---- */
@@ -919,10 +1002,17 @@ function stepNow(){
     if (n >= NOWCAP) break;
     const p = posOf(o.t, o.i); if (!p) continue;
     P[n*3] = p[0]; P[n*3+1] = p[1]; P[n*3+2] = p[2];
-    const b = o.lbl === 'Very faint' ? .55 : o.lbl === 'Faint' ? .8 : 1;
+    const b = o.left ? .25 : o.lbl === 'Very faint' ? .55 : o.lbl === 'Faint' ? .8 : 1;   // (2026-10-20) the ones just gone fade on the globe too
     C[n*3] = .38*b; C[n*3+1] = .96*b; C[n*3+2] = .84*b;
     S[n] = o.lbl === 'Very faint' ? 6 : o.lbl === 'Faint' ? 7.5 : 10;
     n++;
+  }
+  // coming up: gold, so you can watch it approach
+  for (const o of soonList()){
+    if (n >= NOWCAP) break;
+    const p = posOf(o.t, o.i); if (!p) continue;
+    P[n*3] = p[0]; P[n*3+1] = p[1]; P[n*3+2] = p[2];
+    C[n*3] = 1.0; C[n*3+1] = .74; C[n*3+2] = .30; S[n] = 8; n++;
   }
   nowGeo.setDrawRange(0, n);
   nowGeo.attributes.position.needsUpdate = nowGeo.attributes.color.needsUpdate = nowGeo.attributes.size.needsUpdate = true;
@@ -1123,6 +1213,25 @@ function until(p){
   if (m < 60) return { txt: `in ${m} min` };
   return { txt: `in ${Math.floor(m/60)} h ${m % 60} min` };
 }
+/* (2026-10-20) heads-up: what the worker says will get named in the next 10 minutes */
+const soonList = () => { const n = state.now, now = nowMs(); return (n && n.dark && n.soon || []).filter(o => o.start <= now + 10*60000 && o.showT > now - 90000); };
+const soonFor = sel => sel ? soonList().find(o => o.t === sel.t && o.i === sel.i) : null;
+// the one to shout about: the space station if it is coming, otherwise the soonest. A bright pass that is up right now still wins.
+function soonPick(){ const L = soonList(); if (!L.length) return null; const n = nextBright(), now = nowMs(); if (n && now >= n.start && now <= n.end) return null; return L.find(o => o.lbl === 'Very bright') || L[0]; }
+function soonBig(o){   // big number for the card and the rows
+  const s = Math.round((o.start - nowMs())/1000);
+  if (s <= 15) return { big: 'Now', small: 'look up' };
+  if (s < 60) return { big: String(s), small: 'sec' };
+  return { big: String(Math.round(s/60)), small: 'min' };
+}
+function soonWhen(o){ const s = Math.round((o.start - nowMs())/1000); return s <= 15 ? 'Rising now' : s < 60 ? `In ${s} sec` : `In ${Math.round(s/60)} min`; }
+function soonWhere(o){
+  const more = o.peakEl - o.startEl > 15 && height(o.peakEl) !== height(o.startEl) ? `, then it ${climb(o.peakEl)}` : '';
+  return `Look ${dir(o.startAz)}, ${height(o.startEl)}${more}`;
+}
+const leftWords = o => o.left === 'shadow' ? "Faded into Earth's shadow" : o.left === 'set' ? `Went down in the ${dir(o.az)}` : 'Faded out, too faint to see now';
+const upWords = o => o.left ? leftWords(o) : `Look ${dir(o.az)}, ${height(o.el)}, moving toward the ${dir(o.hd)}${o.dim ? '. Getting fainter' : ''}`;
+const upCount = () => ((state.now && state.now.list) || []).filter(o => !o.left).length;
 const mins = p => Math.max(1, Math.round((p.end - p.start)/60000));
 const lookAz = p => p.peakEl >= 55 ? p.startAz : p.peakAz;
 const lookWords = p => p.peakEl >= 70 ? `Look ${dir(p.startAz)}, then straight up` : p.peakEl >= 55 ? `Look ${dir(p.startAz)}, then high up` : `Look ${dir(p.peakAz)}, ${height(p.peakEl)}`;
@@ -1229,6 +1338,12 @@ function passBlock(p){
     <div class="look">${compassSvg(lookAz(p))}<div>${lookWords(p)}</div></div>
     <div class="path">${pathWords(p)}</div>`;
 }
+function soonBlock(o){
+  const b = soonBig(o);
+  return `<div class="timerow"><div class="time" data-soon="${o.start}">${b.big}<small>${b.small}</small></div>
+      <div class="when"><div class="d">Shows at</div><div class="c">${hmS(o.showT)}</div></div></div>
+    <div class="look">${compassSvg(o.startAz)}<div>${soonWhere(o)}</div></div>`;
+}
 function selInfo(){
   const s = state.sel; if (!s) return null;
   const sat = s.t === 'm' ? state.sats[s.i] : s.info;
@@ -1237,7 +1352,7 @@ function selInfo(){
     ? state.passes.find(q => (q.idx === s.i || (sat.kind === 'train' && q.train === sat.train)) && q.end > now)
     : ((state.evening && state.evening.faint) || []).find(q => q.ai === s.i && q.end > now);
   const up = ((state.now && state.now.list) || []).find(o => o.t === s.t && o.i === s.i);
-  return { sat, p, up };
+  return { sat, p, up, sn: soonFor(s) };
 }
 function renderDetail(){
   let html, key;
@@ -1248,12 +1363,13 @@ function renderDetail(){
       <div class="empty">Check your connection and try again.</div>
       <div class="actions"><button class="btn gold" data-act="reload">Try again</button></div>`;
   } else if (state.sel){
-    const { sat, p, up } = selInfo();
-    const lbl = up ? up.lbl : p ? chipFor(p) : '';
-    key = 'sel' + state.sel.t + state.sel.i + (p ? p.start : 'x') + (up ? 'u' + Math.round(up.az/45) + Math.round(up.el/20) : '');
-    html = `<div class="eyebrow"><span>${up ? 'Up there right now' : p ? 'Next time over you' : 'Satellite'}</span>${lbl ? `<span class="${chipCls(lbl)}">${lbl}</span>` : ''}</div>
+    const { sat, p, up, sn } = selInfo();
+    const lbl = up ? up.lbl : sn ? sn.lbl : p ? chipFor(p) : '';
+    key = 'sel' + state.sel.t + state.sel.i + (p ? p.start : 'x') + (up ? 'u' + Math.round(up.az/45) + Math.round(up.el/20) + (up.left || '') + (up.dim ? 'd' : '') : '') + (sn ? 's' + sn.start : '');
+    html = `<div class="eyebrow"><span>${up ? (up.left ? 'Just now' : 'Up there right now') : sn ? 'Coming up' : p ? 'Next time over you' : 'Satellite'}</span>${lbl ? `<span class="${chipCls(lbl)}">${lbl}</span>` : ''}</div>
       <div class="name">${friendly(sat)}</div><div class="empty" style="margin-top:6px">${blurb(sat)}</div>
-      ${up ? `<div class="look">${compassSvg(up.az)}<div>Look ${dir(up.az)}, ${height(up.el)}, moving toward the ${dir(up.hd)}</div></div>`
+      ${up ? `<div class="look ${up.left ? 'gone' : ''}">${compassSvg(up.az)}<div>${upWords(up)}</div></div>`
+        : sn ? soonBlock(sn)
         : p ? passBlock(p) : `<div class="empty" style="color:var(--faint)">${state.obs ? "You won't be able to see this one this evening." : ''}</div>`}
       <div class="actions"><button class="btn slim" data-act="back">Back</button><button class="btn gold" data-act="list">Full list</button></div>`;
   } else if (!state.obs){
@@ -1273,6 +1389,14 @@ function renderDetail(){
     html = `<div class="eyebrow">Next over you</div><div class="name">Nothing bright in the next day</div>
       <div class="empty">Open the list to see the fainter ones.</div>
       <div class="actions"><button class="btn gold" data-act="list">Full list</button></div>`;
+  } else if (soonPick()){
+    // (2026-10-20) heads-up beats the schedule: something will be worth looking at within 10 minutes
+    const sn = soonPick();
+    key = 'soon' + sn.t + sn.i + sn.start;
+    html = `<div class="eyebrow" style="margin-top:2px"><span>Coming up</span><span class="${chipCls(sn.lbl)}">${sn.lbl}</span></div>
+      <div class="name" style="margin-top:4px">${friendly(sn)}</div>
+      ${soonBlock(sn)}
+      <div class="actions"><button class="btn gold" data-act="list">See all ${curated().length} coming up</button></div>`;
   } else {
     key = 'next' + next.idx + next.start;
     html = `<div class="eyebrow" style="margin-top:2px"><span class="name" style="margin:0;color:var(--ink);letter-spacing:-.2px;text-transform:none">${passName(next)}</span><span class="${chipCls(chipFor(next))}">${chipFor(next)}</span></div>
@@ -1289,15 +1413,17 @@ function renderBar(){
   let eye = 'Next over you', main = '', sub = '';
   if (state.dataError){ main = "Can't reach the satellite data"; sub = 'Tap to try again'; }
   else if (state.sel){
-    const { sat, p, up } = selInfo();
-    eye = up ? 'Up right now' : 'Selected';
+    const { sat, p, up, sn } = selInfo();
+    eye = up ? (up.left ? 'Just now' : 'Up right now') : sn ? 'Coming up' : 'Selected';
     main = friendly(sat);
-    sub = up ? `Look ${dir(up.az)}, ${height(up.el)}` : p ? `${hmS(p.start)}, ${shortLook(p)}, ${until(p).txt.toLowerCase()}` : 'Not over you this evening';
+    sub = up ? (up.left ? leftWords(up) : `Look ${dir(up.az)}, ${height(up.el)}`) : sn ? `${soonWhen(sn)}, look ${dir(sn.startAz)}` : p ? `${hmS(p.start)}, ${shortLook(p)}, ${until(p).txt.toLowerCase()}` : 'Not over you this evening';
   } else if (!state.obs){ main = state.locating ? 'Finding where you are' : 'Where are you?'; sub = state.locating ? '' : 'Tap to share your location'; }
   else if (!state.passesReady){ main = "Working out tonight's sky"; }
   else {
-    const n = nextBright();
-    if (n){ main = `${hmS(n.start)}  ${shortLook(n)}`; sub = `${passName(n)}, ${until(n).txt.toLowerCase()}`; }
+    const sn = soonPick(), n = nextBright();
+    // (2026-10-20) heads-up: when something will be worth looking at within 10 minutes, the bar counts it down
+    if (sn){ const w = soonWhen(sn); eye = w === 'Rising now' ? 'Rising now' : w.replace(/^In /, 'Coming up in '); main = `Look ${dir(sn.startAz)}, ${sn.startEl < 25 ? 'low' : sn.startEl < 55 ? 'halfway' : 'high'}`; sub = `${friendly(sn)}${sn.peakEl - sn.startEl > 15 && height(sn.peakEl) !== height(sn.startEl) ? `, then ${sn.peakEl >= 55 ? 'high up' : 'halfway up'}` : ''}`; }
+    else if (n){ main = `${hmS(n.start)}  ${shortLook(n)}`; sub = `${passName(n)}, ${until(n).txt.toLowerCase()}`; }
     else { main = 'Nothing bright in the next day'; sub = 'Open the list for fainter ones'; }
   }
   $('#barEye').textContent = eye; $('#barMain').textContent = main; $('#barSub').textContent = sub || ' ';
@@ -1305,8 +1431,8 @@ function renderBar(){
   if (!state.obs){ chip.style.display = 'none'; return; }
   chip.style.display = '';
   chip.classList.toggle('off', !(now && now.dark));
-  $('#nowChipTxt').textContent = !now ? 'Right now' : now.dark ? `Right now: ${now.list.length}` : 'Right now';
-  $('#tabN').textContent = now && now.dark ? ` ${now.list.length}` : '';
+  $('#nowChipTxt').textContent = !now ? 'Right now' : now.dark ? `Right now: ${upCount()}` : 'Right now';
+  $('#tabN').textContent = now && now.dark ? ` ${upCount()}` : '';
 }
 detail.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1352,13 +1478,20 @@ function renderNow(){
   if (!n.dark) return `<div class="head"><div class="lead">It's still too light out.</div>
     <div class="note">Satellites show up after about ${n.darkAt ? hmS(n.darkAt) : 'dark'}${n.darkAt && new Date(n.darkAt).toDateString() !== new Date(nowMs()).toDateString() ? ' tomorrow' : ''}.</div></div>`;
   const c = { 'Very bright': 0, 'Bright': 0, 'Faint': 0, 'Very faint': 0 };
-  n.list.forEach(o => c[o.lbl]++);
+  const live = n.list.filter(o => !o.left), gone = n.list.filter(o => o.left);
+  live.forEach(o => c[o.lbl]++);
   const mix = [['Bright', c['Very bright'] + c['Bright'], 'chip'], ['Faint', c['Faint'], 'chip faint'], ['Very faint', c['Very faint'], 'chip vfaint']]
     .filter(x => x[1]).map(x => `<span class="${x[2]}">${x[1]} ${x[0].toLowerCase()}</span>`).join('');
-  const rows = n.list.slice(0, 80).map(o => `<button class="row now" data-ref="${o.t}:${o.i}"><div class="dot ${o.lbl === 'Very faint' ? 'dim' : ''}"></div>
-      <div><div class="n">${friendly(o)}</div><div class="l">${dir(o.az)}, ${height(o.el)}, moving toward the ${dir(o.hd)}</div></div>
-      <span class="${chipCls(o.lbl)}">${o.lbl}</span></button>`).join('');
-  return `<div class="head"><div class="big teal">${n.list.length}</div><div class="lead">${n.list.length === 1 ? 'satellite' : 'satellites'} up there right now</div>
+  // (2026-10-20) heads-up first: the next few that will be worth looking at, with a countdown and where to look
+  const soonRows = soonList().slice(0, 3).map(o => { const b = soonBig(o); return `<button class="row soon" data-ref="${o.t}:${o.i}"><div class="t"><span data-soon="${o.start}">${b.big}</span><small>${b.small}</small></div>
+      <div><div class="n">${friendly(o)}</div><div class="l">${soonWhere(o)}</div></div>
+      <span class="${chipCls(o.lbl)}">${o.lbl}</span></button>`; }).join('');
+  const soonHead = soonRows ? `<div class="head"><div class="lead">Coming up</div><div class="note">Where to look, and how long until it shows.</div></div>${soonRows}` : '';
+  const row = o => `<button class="row now ${o.left ? 'gone' : ''}" data-ref="${o.t}:${o.i}"><div class="dot ${o.lbl === 'Very faint' || o.dim || o.left ? 'dim' : ''}"></div>
+      <div><div class="n">${friendly(o)}</div><div class="l">${upWords(o)}</div></div>
+      <span class="${chipCls(o.lbl)}">${o.lbl}</span></button>`;
+  const rows = live.slice(0, 80).map(row).join('') + gone.slice(0, 10).map(row).join('');
+  return `${soonHead}<div class="head"><div class="big teal">${live.length}</div><div class="lead">${live.length === 1 ? 'satellite' : 'satellites'} up there right now</div>
     ${mix ? `<div class="mix">${mix}</div>` : ''}
     <div class="note">Faint ones need dark eyes. Give it 5 minutes away from lights. They glow teal on the globe.</div></div>
     ${rows || `<div class="none">Nothing up there this minute. Check again in a few minutes.</div>`}`;
@@ -1380,6 +1513,7 @@ function refreshNow(){ renderBar(); if (ui.tab === 'now') refreshLists(); if (st
 setInterval(() => {
   const n = $('[data-count]');
   if (n){ const p = state.sel ? selInfo()?.p : nextBright(); if (p){ const u = until(p); n.textContent = u.txt; n.classList.toggle('now', !!u.now); } }
+  document.querySelectorAll('[data-soon]').forEach(el => { const b = soonBig({ start: +el.dataset.soon }); const sm = el.querySelector('small'); el.firstChild.textContent = b.big; if (sm) sm.textContent = b.small; });
   renderDetail(); renderBar();
 }, 1000);
 
@@ -1387,6 +1521,7 @@ setInterval(() => {
 function infoFor(t, i){
   if (t === 'm') return state.sats[i];
   const o = ((state.now && state.now.list) || []).find(x => x.t === 'a' && x.i === i)
+    || ((state.now && state.now.soon) || []).find(x => x.t === 'a' && x.i === i)
     || ((state.evening && state.evening.faint) || []).find(x => x.ai === i);
   return o ? { name: o.name, kind: o.kind, year: o.year } : { name: 'Satellite', kind: 'act' };
 }
